@@ -53,14 +53,14 @@ int num_ues = 0;
 int num_enbs = 0;
 int num_mme_sessions = 0;
 
-void stats_add_ue(void) {
+void stats_add_ue(enb_ue_t *enb_ue) {
     int res = __sync_add_and_fetch(&num_ues, 1);
-    ogs_info("Added a UE. Number of UEs is now %d", res);
+    ogs_info("Added a UE. Number of UEs is now %d. eNB ID %u, MME ID %u", res,  enb_ue->enb_ue_s1ap_id, enb_ue->mme_ue_s1ap_id);
 }
 
-void stats_remove_ue(void) {
+void stats_remove_ue(enb_ue_t *enb_ue) {
     int res = __sync_sub_and_fetch(&num_ues, 1);
-    ogs_info("Removed a UE. Number of UEs is now %d", res);
+    ogs_info("Removed a UE. Number of UEs is now %d. eNB ID %u, MME ID %u", res,  enb_ue->enb_ue_s1ap_id, enb_ue->mme_ue_s1ap_id);
 }
 
 void stats_add_enb(void) {
@@ -2030,7 +2030,7 @@ enb_ue_t *enb_ue_add(mme_enb_t *enb)
             sizeof(enb_ue->mme_ue_s1ap_id), enb_ue);
     ogs_list_add(&enb->enb_ue_list, enb_ue);
 
-    stats_add_ue();
+    stats_add_ue(enb_ue);
 
     return enb_ue;
 }
@@ -2054,7 +2054,7 @@ void enb_ue_remove(enb_ue_t *enb_ue)
     ogs_hash_set(self.mme_ue_s1ap_id_hash, &enb_ue->mme_ue_s1ap_id, 
             sizeof(enb_ue->mme_ue_s1ap_id), NULL);
 
-    stats_remove_ue();
+    stats_remove_ue(enb_ue);
 
     ogs_pool_free(&enb_ue_pool, enb_ue);
 }

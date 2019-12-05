@@ -54,35 +54,33 @@ int num_enbs = 0;
 int num_mme_sessions = 0;
 
 void stats_add_ue(void) {
-    num_ues = num_ues + 1;
-    ogs_info("Added a UE. Number of UEs is now %d", num_ues);
+    int res = __sync_add_and_fetch(&num_ues, 1);
+    ogs_info("Added a UE. Number of UEs is now %d", res);
 }
 
 void stats_remove_ue(void) {
-    num_ues = num_ues - 1;
-    ogs_info("Removed a UE. Number of UEs is now %d", num_ues);
+    int res = __sync_sub_and_fetch(&num_ues, 1);
+    ogs_info("Removed a UE. Number of UEs is now %d", res);
 }
 
 void stats_add_enb(void) {
-    num_enbs = num_enbs + 1;
-    ogs_info("Added a eNB. Number of eNBs is now %d", num_enbs);
+    int res = __sync_add_and_fetch(&num_enbs, 1);
+    ogs_info("Added a eNB. Number of eNBs is now %d", res);
 }
 
 void stats_remove_enb(void) {
-    num_enbs = num_enbs - 1;
-    ogs_info("Removed a eNB. Number of eNBs is now %d", num_enbs);
+    int res = __sync_sub_and_fetch(&num_enbs, 1);
+    ogs_info("Removed a eNB. Number of eNBs is now %d", res);
 }
 
 void stats_add_mme_session(void) {
-    num_mme_sessions = num_mme_sessions + 1;
-    ogs_info("Added a session. Number of sessions is now %d",
-            num_mme_sessions);
+    int res = __sync_add_and_fetch(&num_mme_sessions, 1);
+    ogs_info("Added a session. Number of sessions is now %d", res);
 }
 
 void stats_remove_mme_session(void) {
-    num_mme_sessions = num_mme_sessions - 1;
-    ogs_info("Removed a session. Number of sessions is now %d",
-            num_mme_sessions);
+    int res = __sync_sub_and_fetch(&num_mme_sessions, 1);
+    ogs_info("Removed a session. Number of sessions is now %d", res);
 }
 
 

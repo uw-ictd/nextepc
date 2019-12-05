@@ -37,6 +37,21 @@
 #undef OGS_LOG_DOMAIN
 #define OGS_LOG_DOMAIN __emm_log_domain
 
+int num_connected_ues = 0;
+
+void stats_add_connected_ue(void);
+void stats_remove_connected_ue(void);
+
+void stats_add_connected_ue(void) {
+    int res = __sync_add_and_fetch(&num_connected_ues, 1);
+    ogs_info("Connected a UE. Number of Connected UEs is now %d.", res);
+}
+
+void stats_remove_connected_ue(void) {
+    int res = __sync_sub_and_fetch(&num_connected_ues, 1);
+    ogs_info("Disconnected a UE. Number of Connected UEs is now %d.", res);
+}
+
 void emm_state_initial(ogs_fsm_t *s, mme_event_t *e)
 {
     ogs_assert(s);
@@ -245,6 +260,7 @@ static void common_register_state(ogs_fsm_t *s, mme_event_t *e)
             }
 
             OGS_FSM_TRAN(s, &emm_state_de_registered);
+            stats_remove_connected_ue();
             return;
         case OGS_NAS_UPLINK_NAS_TRANSPORT:
             ogs_debug("[EMM] Uplink NAS Transport");
@@ -602,6 +618,7 @@ void emm_state_authentication(ogs_fsm_t *s, mme_event_t *e)
 
             mme_send_delete_session_or_detach(mme_ue);
             OGS_FSM_TRAN(s, &emm_state_de_registered);
+            stats_remove_connected_ue();
             break;
         default:
             ogs_warn("Unknown message[%d]", message->emm.h.message_type);
@@ -720,6 +737,7 @@ void emm_state_security_mode(ogs_fsm_t *s, mme_event_t *e)
                     MME_EPS_TYPE_SERVICE_REQUEST ||
                     mme_ue->nas_eps.type == MME_EPS_TYPE_TAU_REQUEST) {
                 OGS_FSM_TRAN(s, &emm_state_registered);
+                stats_add_connected_ue();
             } else {
                 ogs_fatal("Invalid OGS_NAS_EPS[%d]", mme_ue->nas_eps.type);
             }
@@ -769,6 +787,7 @@ void emm_state_security_mode(ogs_fsm_t *s, mme_event_t *e)
 
             mme_send_delete_session_or_detach(mme_ue);
             OGS_FSM_TRAN(s, &emm_state_de_registered);
+            stats_remove_connected_ue();
             break;
         default:
             ogs_warn("Unknown message[%d]", message->emm.h.message_type);
@@ -845,6 +864,7 @@ void emm_state_initial_context_setup(ogs_fsm_t *s, mme_event_t *e)
                 sgsap_send_tmsi_reallocation_complete(mme_ue);
 
             OGS_FSM_TRAN(s, &emm_state_registered);
+            stats_add_connected_ue();
             break;
         case OGS_NAS_ATTACH_REQUEST:
             ogs_warn("[EMM] Attach request[%s]", mme_ue->imsi_bcd);
@@ -878,6 +898,7 @@ void emm_state_initial_context_setup(ogs_fsm_t *s, mme_event_t *e)
 
             mme_send_delete_session_or_detach(mme_ue);
             OGS_FSM_TRAN(s, &emm_state_de_registered);
+            stats_remove_connected_ue();
             break;
         default:
             ogs_warn("Unknown message[%d]", 

@@ -2537,7 +2537,7 @@ void mme_ue_associate_enb_ue(mme_ue_t *mme_ue, enb_ue_t *enb_ue)
     mme_ue->enb_ue = enb_ue;
     enb_ue->mme_ue = mme_ue;
 
-    stats_add_attached_ue();
+    // stats_add_attached_ue();
 }
 
 void enb_ue_deassociate(enb_ue_t *enb_ue)
@@ -2551,7 +2551,7 @@ void mme_ue_deassociate(mme_ue_t *mme_ue)
     ogs_assert(mme_ue);
     mme_ue->enb_ue = NULL;
 
-    stats_remove_attached_ue();
+    // stats_remove_attached_ue();
 }
 
 void source_ue_associate_target_ue(

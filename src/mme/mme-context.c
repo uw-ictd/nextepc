@@ -2001,7 +2001,7 @@ int mme_enb_sock_type(ogs_sock_t *sock)
 }
 
 /** enb_ue_context handling function */
-enb_ue_t *enb_ue_add(mme_enb_t *enb)
+enb_ue_t *enb_ue_add(mme_enb_t *enb, S1AP_ENB_UE_S1AP_ID_t enb_ue_s1ap_id)
 {
     enb_ue_t *enb_ue = NULL;
 
@@ -2012,7 +2012,7 @@ enb_ue_t *enb_ue_add(mme_enb_t *enb)
     ogs_assert(enb_ue);
     memset(enb_ue, 0, sizeof *enb_ue);
 
-    enb_ue->enb_ue_s1ap_id = INVALID_UE_S1AP_ID;
+    enb_ue->enb_ue_s1ap_id = enb_ue_s1ap_id;
     enb_ue->mme_ue_s1ap_id = OGS_NEXT_ID(self.mme_ue_s1ap_id, 1, 0xffffffff);
 
     /*
@@ -2030,6 +2030,7 @@ enb_ue_t *enb_ue_add(mme_enb_t *enb)
             sizeof(enb_ue->mme_ue_s1ap_id), enb_ue);
 
     ogs_thread_mutex_lock(&enb->enb_ue_list_mutex);
+    ogs_info("adding enb_ue_s1ap_id %u:%u", enb->enb_id, enb_ue->enb_ue_s1ap_id);
     ogs_list_add(&enb->enb_ue_list, enb_ue);
     ogs_thread_mutex_unlock(&enb->enb_ue_list_mutex);
 
@@ -2052,6 +2053,7 @@ void enb_ue_remove(enb_ue_t *enb_ue)
     enb_ue_deassociate(enb_ue);
 
     ogs_thread_mutex_lock(&enb_ue->enb->enb_ue_list_mutex);
+    ogs_info("removing enb_ue_s1ap_id %u:%u", enb_ue->enb->enb_id, enb_ue->enb_ue_s1ap_id);
     ogs_list_remove(&enb_ue->enb->enb_ue_list, enb_ue);
     ogs_thread_mutex_unlock(&enb_ue->enb->enb_ue_list_mutex);
     ogs_hash_set(self.mme_ue_s1ap_id_hash, &enb_ue->mme_ue_s1ap_id, 

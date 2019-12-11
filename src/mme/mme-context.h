@@ -234,6 +234,7 @@ typedef struct mme_enb_s {
     uint8_t         num_of_supported_ta_list;
     ogs_tai_t       supported_ta_list[OGS_MAX_NUM_OF_TAI * MAX_NUM_OF_BPLMN];
 
+    ogs_hash_t      *enb_ue_s1ap_id_hash;   /* hash table for ENB-UE-S1AP-ID */
     ogs_list_t      enb_ue_list;
     ogs_thread_mutex_t  enb_ue_list_mutex;
 
@@ -676,8 +677,6 @@ void enb_ue_switch_to_enb(enb_ue_t *enb_ue, mme_enb_t *new_enb);
 enb_ue_t *enb_ue_find_by_enb_ue_s1ap_id(
         mme_enb_t *enb, uint32_t enb_ue_s1ap_id);
 enb_ue_t *enb_ue_find_by_mme_ue_s1ap_id(uint32_t mme_ue_s1ap_id);
-enb_ue_t *enb_ue_first_in_enb(mme_enb_t *enb);
-enb_ue_t *enb_ue_next_in_enb(enb_ue_t *enb_ue);
 
 mme_ue_t *mme_ue_add(enb_ue_t *enb_ue);
 void mme_ue_remove(mme_ue_t *mme_ue);

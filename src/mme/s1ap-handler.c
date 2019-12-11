@@ -348,7 +348,11 @@ void s1ap_handle_uplink_nas_transport(
 
     ogs_assert(ENB_UE_S1AP_ID);
     enb_ue = enb_ue_find_by_enb_ue_s1ap_id(enb, *ENB_UE_S1AP_ID);
-    ogs_expect_or_return(enb_ue);
+    // ogs_expect_or_return(enb_ue);
+    if (!enb_ue) {
+        ogs_error("Cannot not find enb_ue %u:%u", enb->enb_id, *ENB_UE_S1AP_ID);
+        return;
+    }
 
     ogs_debug("    ENB_UE_S1AP_ID[%d] MME_UE_S1AP_ID[%d]",
             enb_ue->enb_ue_s1ap_id, enb_ue->mme_ue_s1ap_id);
@@ -1450,6 +1454,10 @@ void s1ap_handle_handover_request_ack(mme_enb_t *enb, ogs_s1ap_message_t *messag
     ogs_assert(target_ue);
 
     target_ue->enb_ue_s1ap_id = *ENB_UE_S1AP_ID;
+    // ue was initially stored with INVALID_ID so we must hash now.
+    ogs_hash_set(enb->enb_ue_s1ap_id_hash, &target_ue->enb_ue_s1ap_id, 
+        sizeof(target_ue->enb_ue_s1ap_id), target_ue);
+    ogs_info("adding enb_ue_s1ap_id %u:%u", enb->enb_id, target_ue->enb_ue_s1ap_id);
 
     source_ue = target_ue->source_ue;
     ogs_assert(source_ue);

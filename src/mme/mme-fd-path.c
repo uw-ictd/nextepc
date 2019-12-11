@@ -115,7 +115,7 @@ void mme_s6a_send_air(mme_ue_t *mme_ue,
     ogs_assert(ret == 0);
     ret = fd_msg_avp_new(ogs_diam_s6a_number_of_requested_vectors, 0, &avpch);
     ogs_assert(ret == 0);
-    val.u32 = 5; // Making a change here for generating more authentication vectors.
+    val.u32 = 1; // Making a change here for generating more authentication vectors.
     ret = fd_msg_avp_setvalue (avpch, &val);
     ogs_assert(ret == 0);
     ret = fd_msg_avp_add (avp, MSG_BRW_LAST_CHILD, avpch);

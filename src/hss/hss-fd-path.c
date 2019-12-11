@@ -192,53 +192,54 @@ static int hss_ogs_diam_s6a_air_cb( struct msg **msg, struct avp *avp,
 #endif
 
     if (auth_info.use_remote_vectors != 1) {
-        if (block_auth_info.use_db != 1) {
-            char buffer[128];
-
-            ogs_debug("[HSS] [CRYPTO] [MILENAGE GENERATE] Starting to generate Milenage Values");
-            ogs_hex_to_ascii(opc, sizeof(opc), buffer, sizeof(buffer));
-            ogs_debug("     Using OPC : [%s]", buffer);
-            ogs_hex_to_ascii(auth_info.amf, sizeof(auth_info.amf), buffer, sizeof(buffer));
-            ogs_debug("     Using AMF : [%s]", buffer);
-            ogs_hex_to_ascii(auth_info.k, sizeof(auth_info.k), buffer, sizeof(buffer));
-            ogs_debug("     Using K : [%s]", buffer);
-            ogs_hex_to_ascii(sqn, sizeof(sqn), buffer, sizeof(buffer));
-            ogs_debug("     Using SQN : [%s]", buffer);
-            ogs_hex_to_ascii(auth_info.rand, sizeof(auth_info.rand), buffer, sizeof(buffer));
-            ogs_debug("     Using RAND : [%s]", buffer);
+//            char buffer[128];
+//
+//            ogs_debug("[HSS] [CRYPTO] [MILENAGE GENERATE] Starting to generate Milenage Values");
+//            ogs_hex_to_ascii(opc, sizeof(opc), buffer, sizeof(buffer));
+//            ogs_debug("     Using OPC : [%s]", buffer);
+//            ogs_hex_to_ascii(auth_info.amf, sizeof(auth_info.amf), buffer, sizeof(buffer));
+//            ogs_debug("     Using AMF : [%s]", buffer);
+//            ogs_hex_to_ascii(auth_info.k, sizeof(auth_info.k), buffer, sizeof(buffer));
+//            ogs_debug("     Using K : [%s]", buffer);
+//            ogs_hex_to_ascii(sqn, sizeof(sqn), buffer, sizeof(buffer));
+//            ogs_debug("     Using SQN : [%s]", buffer);
+//            ogs_hex_to_ascii(auth_info.rand, sizeof(auth_info.rand), buffer, sizeof(buffer));
+//            ogs_debug("     Using RAND : [%s]", buffer);
 
             milenage_generate(opc, auth_info.amf, auth_info.k,
                               ogs_uint64_to_buffer(auth_info.sqn, HSS_SQN_LEN, sqn), auth_info.rand,
                               autn, ik, ck, ak, xres, &xres_len);
 
-            ogs_hex_to_ascii(autn, sizeof(autn), buffer, sizeof(buffer));
-            ogs_debug("    Generate AUTN : [%s]", buffer);
-            ogs_hex_to_ascii(ik, sizeof(ik), buffer, sizeof(buffer));
-            ogs_debug("    Generate IK   : [%s]", buffer);
-            ogs_hex_to_ascii(ck, sizeof(ck), buffer, sizeof(buffer));
-            ogs_debug("    Generate CK   : [%s]", buffer);
-            ogs_hex_to_ascii(ak, sizeof(ak), buffer, sizeof(buffer));
-            ogs_debug("    Generate AK   : [%s]", buffer);
-            ogs_hex_to_ascii(xres, xres_len, buffer, sizeof(buffer));
-            ogs_debug("    Generate XRES : [%s]", buffer);
+//            ogs_hex_to_ascii(autn, sizeof(autn), buffer, sizeof(buffer));
+//            ogs_debug("    Generate AUTN : [%s]", buffer);
+//            ogs_hex_to_ascii(ik, sizeof(ik), buffer, sizeof(buffer));
+//            ogs_debug("    Generate IK   : [%s]", buffer);
+//            ogs_hex_to_ascii(ck, sizeof(ck), buffer, sizeof(buffer));
+//            ogs_debug("    Generate CK   : [%s]", buffer);
+//            ogs_hex_to_ascii(ak, sizeof(ak), buffer, sizeof(buffer));
+//            ogs_debug("    Generate AK   : [%s]", buffer);
+//            ogs_hex_to_ascii(xres, xres_len, buffer, sizeof(buffer));
+//            ogs_debug("    Generate XRES : [%s]", buffer);
 
-            ogs_debug("[HSS] [CRYPTO] [MILENAGE GENERATE] Ending generate Milenage Values");
-
-            ogs_debug("[HSS] [CRYPTO] [MILENAGE GENERATE] Starting to generate K_asme");
+//            ogs_debug("[HSS] [CRYPTO] [MILENAGE GENERATE] Ending generate Milenage Values");
+//
+//            ogs_debug("[HSS] [CRYPTO] [MILENAGE GENERATE] Starting to generate K_asme");
             hss_auc_kasme(ck, ik, hdr->avp_value->os.data, sqn, ak, kasme);
-            ogs_hex_to_ascii(kasme, sizeof(kasme), buffer, sizeof(buffer));
-            ogs_debug("    Generate Kasme : [%s]", buffer);
-            ogs_debug("[HSS] [CRYPTO] [MILENAGE GENERATE] Ending generation of K_asme");
+//            ogs_hex_to_ascii(kasme, sizeof(kasme), buffer, sizeof(buffer));
+//            ogs_debug("    Generate Kasme : [%s]", buffer);
+//            ogs_debug("[HSS] [CRYPTO] [MILENAGE GENERATE] Ending generation of K_asme");
         } else {
             ogs_debug("Using the values generated and inserted into the database for authentication");
-//            kasme = block_auth_info.kasme;
             memcpy(kasme, block_auth_info.kasme, OGS_SHA256_DIGEST_SIZE);
-//            xres = block_auth_info.xres;
             memcpy(xres, block_auth_info.xres, block_auth_info.xres_len);
             xres_len = block_auth_info.xres_len;
-//            autn = block_auth_info.autn;
             memcpy(autn, block_auth_info.autn, OGS_AUTN_LEN);
-        }
+            memcpy(ck, block_auth_info.ck, HSS_KEY_LEN);
+            memcpy(ik, block_auth_info.ik, HSS_KEY_LEN);
+            memcpy(ak, block_auth_info.ak, HSS_AK_LEN);
+            memcpy(auth_info.rand, block_auth_info.rand, OGS_RAND_LEN);
+            ogs_uint64_to_buffer(block_auth_info.sqn, HSS_SQN_LEN, sqn);
+            ogs_debug("Setting the authentication vector values as obtained from the database");
     }
 
     /* Set the Authentication-Info */
@@ -263,14 +264,10 @@ static int hss_ogs_diam_s6a_air_cb( struct msg **msg, struct avp *avp,
 
     ret = fd_msg_avp_new(ogs_diam_s6a_xres, 0, &avp_xres);
     ogs_assert(ret == 0);
-    if (!auth_info.use_remote_vectors == 1) {
-        val.os.data = xres;
-        val.os.len = xres_len;
-    } else {
-        ogs_debug("    [Setting XRES] from provided Authentication Vectors");
-        val.os.data = block_auth_info.xres;
-        val.os.len = block_auth_info.xres_len;
-    }
+
+    val.os.data = xres;
+    val.os.len = xres_len;
+
     ret = fd_msg_avp_setvalue(avp_xres, &val);
     ogs_assert(ret == 0);
     ret = fd_msg_avp_add(avp_e_utran_vector, MSG_BRW_LAST_CHILD, avp_xres);
@@ -278,12 +275,7 @@ static int hss_ogs_diam_s6a_air_cb( struct msg **msg, struct avp *avp,
 
     ret = fd_msg_avp_new(ogs_diam_s6a_autn, 0, &avp_autn);
     ogs_assert(ret == 0);
-    if (!auth_info.use_remote_vectors == 1) {
-        val.os.data = autn;
-    } else {
-        ogs_debug("    [Setting AUTN] from provided Authentication Vectors");
-        val.os.data = block_auth_info.autn;
-    }
+    val.os.data = autn;
     val.os.len = OGS_AUTN_LEN;
     ret = fd_msg_avp_setvalue(avp_autn, &val);
     ogs_assert(ret == 0);
@@ -292,12 +284,7 @@ static int hss_ogs_diam_s6a_air_cb( struct msg **msg, struct avp *avp,
 
     ret = fd_msg_avp_new(ogs_diam_s6a_kasme, 0, &avp_kasme);
     ogs_assert(ret == 0);
-    if (!auth_info.use_remote_vectors == 1) {
-        val.os.data = kasme;
-    } else {
-        ogs_debug("    [Setting Kasme] from provided Authentication Vectors");
-        val.os.data = block_auth_info.kasme;
-    }
+    val.os.data = kasme;
     val.os.len = OGS_SHA256_DIGEST_SIZE;
     ret = fd_msg_avp_setvalue(avp_kasme, &val);
     ogs_assert(ret == 0);

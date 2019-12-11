@@ -382,6 +382,21 @@ int hss_db_fetch_sawtooth_authentication_vectors(char *imsi_bcd, hss_blockchain_
                         blockchain_auth_info->sqn = bson_iter_int64(&tInnerIter);
                         ogs_debug("Assigning SQN to [%lx] : ", blockchain_auth_info->sqn);
                     }
+                    else if (!strcmp(key, "ak")) {
+                        utf8 = (char*) bson_iter_utf8(&tInnerIter, &length);
+                        memcpy(blockchain_auth_info->ak, OGS_HEX(utf8, length, buf), HSS_AK_LEN);
+                        ogs_debug("Assigning AK to [%s]", utf8);
+                    }
+                    else if (!strcmp(key, "ck")) {
+                        utf8 = (char*) bson_iter_utf8(&tInnerIter, &length);
+                        memcpy(blockchain_auth_info->ck, OGS_HEX(utf8, length, buf), HSS_KEY_LEN);
+                        ogs_debug("Assigning CK to [%s]", utf8);
+                    }
+                    else if (!strcmp(key, "ik")) {
+                        utf8 = (char*) bson_iter_utf8(&tInnerIter, &length);
+                        memcpy(blockchain_auth_info->ik, OGS_HEX(utf8, length, buf), HSS_KEY_LEN);
+                        ogs_debug("Assigning IK to [%s]", utf8);
+                    }
                 }
             }
         }
@@ -464,7 +479,7 @@ int hss_db_write_additional_vectors(char *imsi_bcd, hss_db_auth_info_t *auth_inf
     temp_sqn = auth_info->sqn;
 
     int i=1;
-    for (; i<4; i++) {
+    for (; i<10; i++) {
         temp_sqn+=32;
         ogs_uint64_to_buffer(temp_sqn, HSS_SQN_LEN, sqn);
         milenage_generate(opc, auth_info->amf, auth_info->k, sqn, auth_info->rand, autn, ik, ck, ak, xres, &xres_len);
@@ -505,6 +520,21 @@ int hss_db_write_additional_vectors(char *imsi_bcd, hss_db_auth_info_t *auth_inf
         ogs_assert(kasme);
         ogs_hex_to_ascii(kasme, OGS_SHA256_DIGEST_SIZE, printable_kasme, sizeof(printable_kasme));
         ogs_debug("  Kasme: [%s]", printable_kasme);
+
+        char printable_ck[128];
+        ogs_assert(ck);
+        ogs_hex_to_ascii(ck, HSS_KEY_LEN, printable_ck, sizeof(printable_ck));
+        ogs_debug("  CK : [%s]", printable_ck);
+
+        char printable_ik[128];
+        ogs_assert(ik);
+        ogs_hex_to_ascii(ik, HSS_KEY_LEN, printable_ik, sizeof(printable_ik));
+        ogs_debug("  IK : [%s]", printable_ik);
+
+        char printable_ak[128];
+        ogs_assert(ak);
+        ogs_hex_to_ascii(ak, HSS_AK_LEN, printable_ak, sizeof(printable_ak));
+        ogs_debug("   AK : [%s]", printable_ak);
         ogs_debug("===================[END   AUTH VECTORS]===================");
 
         // Need to write this data to the mongo db instance.
@@ -519,6 +549,9 @@ int hss_db_write_additional_vectors(char *imsi_bcd, hss_db_auth_info_t *auth_inf
                                   "xres", printable_xres,
                                   "kasme", printable_kasme,
                                   "autn", printable_autn,
+                                  "ck", printable_ck,
+                                  "ak", printable_ak,
+                                  "ik", printable_ik,
                               "}",
                           "}");
 

@@ -56,6 +56,9 @@ typedef struct _hss_blockchain_auth_vector {
     uint8_t     kasme[OGS_SHA256_DIGEST_SIZE];
     uint64_t    sqn;
     uint8_t     use_db;
+    uint8_t     ak[6];
+    uint8_t     ck[HSS_KEY_LEN];
+    uint8_t     ik[HSS_KEY_LEN];
 } hss_blockchain_auth_vector_t;
 
 typedef struct _hss_context_t {

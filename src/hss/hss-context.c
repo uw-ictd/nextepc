@@ -18,6 +18,8 @@
  */
 
 #include "ogs-dbi.h"
+#include "ogs-crypt.h"
+#include "hss-auc.h"
 #include "hss-context.h"
 
 static hss_context_t self;
@@ -278,9 +280,280 @@ int hss_db_final()
     return OGS_OK;
 }
 
+int hss_db_fetch_sawtooth_authentication_vectors(char *imsi_bcd, hss_blockchain_auth_vector_t *blockchain_auth_info) {
+    ogs_debug("    [BYPASS] Fetching the Authentication Vectors submitted to the blockchain");
+    int rv = OGS_OK;
+    mongoc_cursor_t *cursor = NULL;
+    bson_t *query = NULL;
+    bson_t *pop = NULL;
+    bson_error_t error;
+    const bson_t *document;
+    bson_iter_t iter;
+    bson_iter_t inner_iter;
+    bson_iter_t child;
+    uint32_t av_count;
+    const uint8_t *av;
+    char buf[HSS_KEY_LEN];
+    char kasmebuf[OGS_SHA256_DIGEST_SIZE];
+    char *utf8 = NULL;
+    uint32_t length = 0;
+
+    ogs_assert(imsi_bcd);
+    ogs_assert(blockchain_auth_info);
+
+    ogs_thread_mutex_lock(&self.db_lock);
+
+    query = BCON_NEW("imsi", BCON_UTF8(imsi_bcd));
+#if MONGOC_MAJOR_VERSION >= 1 && MONGOC_MINOR_VERSION >= 5
+    cursor = mongoc_collection_find_with_opts(
+            self.subscriberCollection, query, NULL, NULL);
+#else
+    cursor = mongoc_collection_find(self.subscriberCollection,
+                                    MONGOC_QUERY_NONE, 0, 0, 0, query, NULL, NULL);
+#endif
+
+    if (!mongoc_cursor_next(cursor, &document)) {
+        ogs_warn("Cannot find IMSI in DB : %s", imsi_bcd);
+
+        rv = OGS_ERROR;
+        goto out;
+    }
+
+    if (mongoc_cursor_error(cursor, &error)) {
+        ogs_error("Cursor Failure: %s", error.message);
+
+        rv = OGS_ERROR;
+        goto out;
+    }
+
+    if (!bson_iter_init_find(&iter, document, "security")) {
+        ogs_error("No 'security' field in this document");
+
+        rv = OGS_ERROR;
+        goto out;
+    }
+
+    // authvectors are a part of the security parameters.
+    memset(blockchain_auth_info, 0, sizeof(hss_blockchain_auth_vector_t));
+    bson_iter_recurse(&iter, &inner_iter);
+
+    while (bson_iter_next(&inner_iter)) {
+        const char *key = bson_iter_key(&inner_iter);
+        // Replace the authentication_info objects based on the quadruples of information that's read from here as
+        // a new key entry into the security object of each IMSI collection.
+        if (!strcmp(key, "authvectors") && BSON_ITER_HOLDS_ARRAY(&inner_iter)) {
+            bson_iter_array(&inner_iter, &av_count, &av);
+            ogs_debug("Count AV_Count : [%d]", av_count);
+            if (av_count <= 0) {
+                ogs_debug("    Could not find any auth vectors in the field. Failing and falling back gracefully.");
+            } else {
+                ogs_debug("    Time to perform the required actions and create the auth vector from the data");
+                bson_t * temporary_vectors = bson_new_from_data(av, av_count);
+                ogs_debug("    Parsing the response into the corresponding auth vector structures");
+                bson_iter_t tIter;
+                bson_iter_t tInnerIter;
+                bson_iter_init(&tIter, temporary_vectors);
+                // Get only one item
+                bson_iter_find(&tIter, "0");
+                // This is a document structure.
+                bson_iter_recurse(&tIter, &tInnerIter);
+                while (bson_iter_next(&tInnerIter)) {
+                    const char *key = bson_iter_key(&tInnerIter);
+                    ogs_debug("         [InnerObject] Found the key : [%s]" , key);
+                    if (!strcmp(key, "rand")) {
+                        // TODO: Process and read this content clearly from the database.
+                        utf8 = (char *) bson_iter_utf8(&tInnerIter, &length);
+                        ogs_debug("Assigning RAND : [%s]", utf8);
+                        memcpy(blockchain_auth_info->rand, OGS_HEX(utf8, length, buf), OGS_RAND_LEN);
+                    } else if (!strcmp(key, "xres")) {
+                        utf8 = (char*) bson_iter_utf8(&tInnerIter, &length);
+                        ogs_debug("Assigning XRES : [%s] [%d]", utf8, length);
+                        blockchain_auth_info->xres_len = 8; // TODO: Figure this out later if it breaks.
+                        memcpy(blockchain_auth_info->xres, OGS_HEX(utf8, length, buf), 8);
+                    } else if (!strcmp(key, "autn")) {
+                        utf8 = (char*) bson_iter_utf8(&tInnerIter, &length);
+                        ogs_debug("Assigning AUTN: [%s]", utf8);
+                        memcpy(blockchain_auth_info->autn, OGS_HEX(utf8, length, buf), OGS_AUTN_LEN);
+                    } else if (!strcmp(key, "kasme")) {
+                        utf8 = (char*) bson_iter_utf8(&tInnerIter, &length);
+                        ogs_debug("Assigning Kasme : [%s]", utf8);
+                        memcpy(blockchain_auth_info->kasme, OGS_HEX(utf8, length, kasmebuf), OGS_SHA256_DIGEST_SIZE);
+                    } else if (!strcmp(key, "sqn")) {
+                        blockchain_auth_info->sqn = bson_iter_int64(&tInnerIter);
+                        ogs_debug("Assigning SQN to [%lx] : ", blockchain_auth_info->sqn);
+                    }
+                }
+            }
+        }
+    }
+
+    // Remove the accessed item from the database using $pop -1 on the security.authvectors for the given IMSI.
+    query = BCON_NEW("imsi", BCON_UTF8(imsi_bcd));
+    pop = BCON_NEW("$pop",
+                    "{",
+                        "security.authvectors", BCON_INT64(-1),
+                    "}");
+
+    ogs_debug("    [DB UPDATE] Removing a used auth vector from IMSI [%s]", imsi_bcd);
+
+    if (!mongoc_collection_update(self.subscriberCollection,
+                                  MONGOC_UPDATE_UPSERT, query, pop, NULL, &error)) {
+        ogs_error("mongoc_collection_update() failure: %s", error.message);
+        rv = OGS_ERROR;
+    }
+
+out:
+    if (query) bson_destroy(query);
+    if (cursor) mongoc_cursor_destroy(cursor);
+
+    ogs_thread_mutex_unlock(&self.db_lock);
+
+    return rv;
+}
+
+int hss_db_write_additional_vectors(char *imsi_bcd, hss_db_auth_info_t *auth_info, uint8_t *opc, struct avp_hdr *hdr,
+                                    hss_blockchain_auth_vector_t *blockchain_auth_info) {
+
+    // TODO: Do this with different RAND values to change the corresponding XRES value.
+
+    ogs_debug("    [Home HSS] Generating additional authentication vectors");
+    int rv = OGS_OK;
+    mongoc_cursor_t *cursor = NULL;
+    bson_t *query = NULL;
+    bson_t *push = NULL;
+    bson_error_t error;
+    const bson_t *document;
+
+    // Temporary parameters being overwritten
+    uint8_t sqn[HSS_SQN_LEN];
+    uint8_t autn[OGS_AUTN_LEN];
+    uint8_t ik[HSS_KEY_LEN];
+    uint8_t ck[HSS_KEY_LEN];
+    uint8_t ak[HSS_AK_LEN];
+    uint8_t xres[OGS_MAX_RES_LEN];
+    uint8_t kasme[OGS_SHA256_DIGEST_SIZE];
+    size_t xres_len = 8;
+    // End of Temporary parameters that are being used.
+
+    ogs_thread_mutex_lock(&self.db_lock);
+
+    query = BCON_NEW("imsi", BCON_UTF8(imsi_bcd));
+#if MONGOC_MAJOR_VERSION >= 1 && MONGOC_MINOR_VERSION >= 5
+    cursor = mongoc_collection_find_with_opts(
+            self.subscriberCollection, query, NULL, NULL);
+#else
+    cursor = mongoc_collection_find(self.subscriberCollection,
+                                    MONGOC_QUERY_NONE, 0, 0, 0, query, NULL, NULL);
+#endif
+
+    if (!mongoc_cursor_next(cursor, &document)) {
+        ogs_warn("Cannot find IMSI in DB : %s", imsi_bcd);
+
+        rv = OGS_ERROR;
+        goto out;
+    }
+
+    if (mongoc_cursor_error(cursor, &error)) {
+        ogs_error("Cursor Failure: %s", error.message);
+
+        rv = OGS_ERROR;
+        goto out;
+    }
+
+    uint64_t temp_sqn;
+    temp_sqn = auth_info->sqn;
+
+    int i=1;
+    for (; i<4; i++) {
+        temp_sqn+=32;
+        ogs_uint64_to_buffer(temp_sqn, HSS_SQN_LEN, sqn);
+        milenage_generate(opc, auth_info->amf, auth_info->k, sqn, auth_info->rand, autn, ik, ck, ak, xres, &xres_len);
+        hss_auc_kasme(ck, ik, hdr->avp_value->os.data, sqn, ak, kasme);
+
+        if (i == 1) {
+            memcpy(blockchain_auth_info->autn, autn, OGS_AUTN_LEN);
+            memcpy(blockchain_auth_info->rand, auth_info->rand, OGS_RAND_LEN);
+            blockchain_auth_info->sqn = temp_sqn;
+            blockchain_auth_info->xres_len = xres_len;
+            memcpy(blockchain_auth_info->xres, xres, xres_len);
+            memcpy(blockchain_auth_info->kasme, kasme, OGS_SHA256_DIGEST_SIZE);
+            blockchain_auth_info->use_db = 1;
+        }
+
+        ogs_debug("===================[START AUTH VECTORS]===================");
+        char printable_autn[128];
+        ogs_assert(autn);
+        ogs_hex_to_ascii(autn, OGS_AUTN_LEN, printable_autn, sizeof(printable_autn));
+        ogs_debug("  AUTN : [%s]", printable_autn);
+
+        char printable_sqn[128];
+        ogs_assert(sqn);
+        ogs_hex_to_ascii(sqn, HSS_SQN_LEN, printable_sqn, sizeof(printable_sqn));
+        ogs_debug("  SQN  : [%s]", printable_sqn);
+
+        char printable_xres[128];
+        ogs_assert(xres);
+        ogs_hex_to_ascii(xres, xres_len, printable_xres, sizeof(printable_xres));
+        ogs_debug("  XRES : [%s]", printable_xres);
+
+        char printable_rand[128];
+        ogs_assert(rand);
+        ogs_hex_to_ascii(rand, OGS_RAND_LEN, printable_rand, sizeof(printable_rand));
+        ogs_debug("  RAND : [%s]", printable_rand);
+
+        char printable_kasme[128];
+        ogs_assert(kasme);
+        ogs_hex_to_ascii(kasme, OGS_SHA256_DIGEST_SIZE, printable_kasme, sizeof(printable_kasme));
+        ogs_debug("  Kasme: [%s]", printable_kasme);
+        ogs_debug("===================[END   AUTH VECTORS]===================");
+
+        // Need to write this data to the mongo db instance.
+
+        query = BCON_NEW("imsi", BCON_UTF8(imsi_bcd));
+        push = BCON_NEW("$push",
+                          "{",
+                              "security.authvectors",
+                              "{",
+                                  "rand", printable_rand,
+                                  "sqn", BCON_INT64(temp_sqn),
+                                  "xres", printable_xres,
+                                  "kasme", printable_kasme,
+                                  "autn", printable_autn,
+                              "}",
+                          "}");
+
+        ogs_debug("    [DB UPDATE] Adding new auth vectors to IMSI [%s]", imsi_bcd);
+
+        if (!mongoc_collection_update(self.subscriberCollection,
+                                      MONGOC_UPDATE_UPSERT, query, push, NULL, &error)) {
+            ogs_error("mongoc_collection_update() failure: %s", error.message);
+
+            rv = OGS_ERROR;
+        }
+    }
+
+    ogs_debug("    [Home HSS] Finished generating additional authentication vectors");
+
+out:
+    if (query) bson_destroy(query);
+    if (push) bson_destroy(push);
+    if (cursor) mongoc_cursor_destroy(cursor);
+
+    ogs_thread_mutex_unlock(&self.db_lock);
+
+    return rv;
+}
+
+void print_required_vectors(uint8_t *autn, uint8_t *sqn, uint8_t *xres, uint8_t *rand, uint8_t *kasme) {
+
+}
+
 int hss_db_auth_info(
     char *imsi_bcd, hss_db_auth_info_t *auth_info)
 {
+    ogs_debug("[HSS Context] DB AUTH INFO: Received IMSI : [%s]", imsi_bcd);
+    ogs_debug("              DB AUTH INFO: Received SQN : [%lx]", auth_info->sqn);
+    ogs_debug("              DB AUTH INFO: Received RAND : [%s]", auth_info->rand);
     int rv = OGS_OK;
     mongoc_cursor_t *cursor = NULL;
     bson_t *query = NULL;
@@ -288,9 +561,11 @@ int hss_db_auth_info(
     const bson_t *document;
     bson_iter_t iter;
     bson_iter_t inner_iter;
+    bson_iter_t auth_vector_iter;
     char buf[HSS_KEY_LEN];
     char *utf8 = NULL;
     uint32_t length = 0;
+    int is_remote = 0;
 
     ogs_assert(imsi_bcd);
     ogs_assert(auth_info);
@@ -320,6 +595,19 @@ int hss_db_auth_info(
         goto out;
     }
 
+    memset(auth_info, 0, sizeof(hss_db_auth_info_t));
+
+    if (!bson_iter_init_find(&iter, document, "remote")) {
+        // This is a new key that is added to the remote HSS corresponding to the different IMSI which
+        // are not owned by the actual HSS.
+        ogs_debug("No 'remote' field in this document. Setting remote = %d", is_remote);
+    } else {
+        is_remote = 1;
+        auth_info->use_remote_vectors = 1;
+        ogs_debug("The Requested IMSI [%s] is from a remote peer. Use predefined vectors instead. Remote: %d",
+                imsi_bcd, is_remote);
+    }
+
     if (!bson_iter_init_find(&iter, document, "security")) {
         ogs_error("No 'security' field in this document");
 
@@ -327,7 +615,6 @@ int hss_db_auth_info(
         goto out;
     }
 
-    memset(auth_info, 0, sizeof(hss_db_auth_info_t));
     bson_iter_recurse(&iter, &inner_iter);
     while (bson_iter_next(&inner_iter)) {
         const char *key = bson_iter_key(&inner_iter);
@@ -351,7 +638,24 @@ int hss_db_auth_info(
         } else if (!strcmp(key, "sqn") && BSON_ITER_HOLDS_INT64(&inner_iter)) {
             auth_info->sqn = bson_iter_int64(&inner_iter);
         }
+        // Replace the authentication_info objects based on the quadruples of information that's read from here as
+        // a new key entry into the security object of each IMSI collection.
     }
+
+    char printable_rand[128], printable_amf[16], printable_op[128], printable_opc[128], printable_k[128];
+    ogs_hex_to_ascii(auth_info->rand, OGS_RAND_LEN, printable_rand, sizeof(printable_rand));
+    ogs_hex_to_ascii(auth_info->amf, 2, printable_amf, sizeof(printable_amf));
+    ogs_hex_to_ascii(auth_info->op, 16, printable_op, sizeof(printable_op));
+    ogs_hex_to_ascii(auth_info->opc, 16, printable_opc, sizeof(printable_opc));
+    ogs_hex_to_ascii(auth_info->k, 16, printable_k, sizeof(printable_k));
+
+    ogs_debug("[HSS Context After DB Operation] DB AUTH INFO: Received IMSI : [%s]", imsi_bcd);
+    ogs_debug("              DB AUTH INFO: Received SQN : [%lx]", auth_info->sqn);
+    ogs_debug("              DB AUTH INFO: Received RAND : [%s]", printable_rand);
+    ogs_debug("              DB AUTH INFO: Received AMF : [%s]", printable_amf);
+    ogs_debug("              DB AUTH INFO: Received OP : [%s]", printable_op);
+    ogs_debug("              DB AUTH INFO: Received OPC : [%s]", printable_opc);
+    ogs_debug("              DB AUTH INFO: Received K : [%s]", printable_k);
 
 out:
     if (query) bson_destroy(query);
@@ -383,6 +687,8 @@ int hss_db_update_rand_and_sqn(
                 "security.sqn", BCON_INT64(sqn),
             "}");
 
+    ogs_debug("    [DB UPDATE] Updating IMSI %s to have RAND [%s] and SQN [%lx]", imsi_bcd, printable_rand, sqn);
+
     if (!mongoc_collection_update(self.subscriberCollection,
             MONGOC_UPDATE_NONE, query, update, NULL, &error)) {
         ogs_error("mongoc_collection_update() failure: %s", error.message);
@@ -407,12 +713,15 @@ int hss_db_increment_sqn(char *imsi_bcd)
     uint64_t max_sqn = HSS_MAX_SQN;
 
     ogs_thread_mutex_lock(&self.db_lock);
+    ogs_debug("    [DB UPDATE] Incrementing SEQ for IMSI: [%s] and MAX_SQN: [%lx]", imsi_bcd, max_sqn);
 
     query = BCON_NEW("imsi", BCON_UTF8(imsi_bcd));
+    // Does this keep incrementing the SQN parameters by 32? Looks like it.
     update = BCON_NEW("$inc",
             "{",
                 "security.sqn", BCON_INT64(32),
             "}");
+    ogs_debug("    [HSS Mongo Context] Running inc operation on IMSI");
     if (!mongoc_collection_update(self.subscriberCollection,
             MONGOC_UPDATE_NONE, query, update, NULL, &error)) {
         ogs_error("mongoc_collection_update() failure: %s", error.message);
@@ -427,6 +736,7 @@ int hss_db_increment_sqn(char *imsi_bcd)
                 "security.sqn", 
                 "{", "and", BCON_INT64(max_sqn), "}",
             "}");
+    ogs_debug("    [HSS Mongo Context] Running bit (and) operation on IMSI");
     if (!mongoc_collection_update(self.subscriberCollection,
             MONGOC_UPDATE_NONE, query, update, NULL, &error)) {
         ogs_error("mongoc_collection_update() failure: %s", error.message);

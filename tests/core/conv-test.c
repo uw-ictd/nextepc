@@ -148,6 +148,18 @@ static void conv_test7(abts_case *tc, void *data)
     ABTS_TRUE(tc, strcmp("001010123456819", out) == 0);
 }
 
+static void conv_test8(abts_case *tc, void *data) {
+    char *utf8 = NULL;
+    char buf[32];
+    uint32_t length = 71;
+    utf8 = "712563c8 7ffd6433 05daf106 95656522 c4a504c1 65440616 a10eb271 c7e0a232";
+    OGS_HEX(utf8, length, buf);
+    printf("buf : %s", buf);
+    printf("utf8: %s", utf8);
+
+    // TODO: Check and assert.
+}
+
 abts_suite *test_conv(abts_suite *suite)
 {
     suite = ADD_SUITE(suite)
@@ -158,6 +170,7 @@ abts_suite *test_conv(abts_suite *suite)
     abts_run_test(suite, conv_test5, NULL);
     abts_run_test(suite, conv_test6, NULL);
     abts_run_test(suite, conv_test7, NULL);
+    abts_run_test(suite, conv_test8, NULL);
 
     return suite;
 }

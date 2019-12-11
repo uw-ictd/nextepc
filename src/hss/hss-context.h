@@ -45,7 +45,18 @@ typedef struct _hss_db_auth_info_t {
     uint8_t       amf[HSS_AMF_LEN];
     uint8_t       rand[OGS_RAND_LEN];
     uint64_t      sqn;
+    uint8_t       use_remote_vectors;
 } hss_db_auth_info_t;
+
+typedef struct _hss_blockchain_auth_vector {
+    uint8_t     rand[OGS_RAND_LEN];
+    uint8_t     xres[OGS_MAX_RES_LEN];
+    size_t      xres_len;
+    uint8_t     autn[OGS_AUTN_LEN];
+    uint8_t     kasme[OGS_SHA256_DIGEST_SIZE];
+    uint64_t    sqn;
+    uint8_t     use_db;
+} hss_blockchain_auth_vector_t;
 
 typedef struct _hss_context_t {
     const char          *diam_conf_path;      /* HSS Diameter conf path */
@@ -67,6 +78,10 @@ int hss_db_final(void);
 int hss_db_auth_info(char *imsi_bcd, hss_db_auth_info_t *auth_info);
 int hss_db_update_rand_and_sqn(char *imsi_bcd, uint8_t *rand, uint64_t sqn);
 int hss_db_increment_sqn(char *imsi_bcd);
+int hss_db_fetch_sawtooth_authentication_vectors(char *imsi_bcd, hss_blockchain_auth_vector_t *blockchain_auth_info);
+int hss_db_write_additional_vectors(char *imsi_bcd, hss_db_auth_info_t *auth_info, uint8_t *opc, struct avp_hdr *hdr,
+                                    hss_blockchain_auth_vector_t *blockchain_auth_info);
+void print_required_vectors(uint8_t *autn, uint8_t *sqn, uint8_t *xres, uint8_t *rand, uint8_t *kasme);
 
 int hss_db_subscription_data(
     char *imsi_bcd, ogs_diam_s6a_subscription_data_t *subscription_data);

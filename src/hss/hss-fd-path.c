@@ -23,6 +23,8 @@
 #include "hss-auc.h"
 #include "hss-fd-path.h"
 
+#include <inttypes.h>
+
 /* handler for fallback cb */
 static struct disp_hdl *hdl_s6a_fb = NULL; 
 /* handler for Authentication-Information-Request cb */
@@ -67,6 +69,7 @@ static int hss_ogs_diam_s6a_air_cb( struct msg **msg, struct avp *avp,
     uint8_t mac_s[MAC_S_LEN];
 
     hss_db_auth_info_t auth_info;
+    hss_blockchain_auth_vector_t block_auth_info;
     uint8_t zero[OGS_RAND_LEN];
     int rv;
     uint32_t result_code = 0;
@@ -76,6 +79,7 @@ static int hss_ogs_diam_s6a_air_cb( struct msg **msg, struct avp *avp,
     ogs_debug("[HSS] Authentication-Information-Request\n");
 	
 	/* Create answer header */
+	ogs_debug("    Creating an answer header\n");
 	qry = *msg;
 	ret = fd_msg_new_answer_from_req(fd_g_config->cnf_dict, msg, 0);
     ogs_assert(ret == 0);
@@ -94,22 +98,48 @@ static int hss_ogs_diam_s6a_air_cb( struct msg **msg, struct avp *avp,
         goto out;
     }
 
+    ogs_debug("    [HSS] [1. Update] IMSI: [%s] with RAND: [%s] and SEQ: [%lx]",
+              imsi_bcd, auth_info.rand , auth_info.sqn);
+
+    // If there is no value of RAND that's retrieved from the database, Create a new RAND value
     memset(zero, 0, sizeof(zero));
     if (memcmp(auth_info.rand, zero, OGS_RAND_LEN) == 0) {
+        ogs_debug("    Assigning a new rand value to the auth_info.");
         ogs_random(auth_info.rand, OGS_RAND_LEN);
     }
 
+    // Choose whether the Milenage functions need to be executed with the OPC, K values or the OP, K values.
+    // This is dependent on the auth_info->use_opc which is the existence of opc in the mongo security object per IMSI.
     if (auth_info.use_opc)
         memcpy(opc, auth_info.opc, sizeof(opc));
     else
         milenage_opc(auth_info.k, auth_info.op, opc);
 
+    // In the case of the item being queried for the first time with no SQN number, this SEQ value would be empty
+
+    ogs_debug("    [HSS] [2. Update] IMSI: [%s] with RAND: [%s] and SQN: [%lx]",
+              imsi_bcd, auth_info.rand, auth_info.sqn);
+
+    ogs_debug("    [Remote Vectors] The value of use_remote_vectors : [%d]", auth_info.use_remote_vectors);
+
+//    rv = hss_db_write_additional_vectors(imsi_bcd, &auth_info, opc); // TODO: Remove and replace appropriately.
+    if (auth_info.use_remote_vectors == 1) {
+        // Look up the information directly from the database and use it.
+        ogs_debug("    [Remote Vectors] Look at the information directly from the database.");
+        // Create a bypass here.
+        rv = hss_db_fetch_sawtooth_authentication_vectors(imsi_bcd, &block_auth_info);
+    } else {
+        rv = hss_db_write_additional_vectors(imsi_bcd, &auth_info, opc, hdr, &block_auth_info);
+    }
+
     ret = fd_msg_search_avp(qry, ogs_diam_s6a_req_eutran_auth_info, &avp);
     ogs_assert(ret == 0);
     if (avp) {
+        ogs_debug("[START] S6A REQ E-UTRAN AUTH INFO succeeds\n");
         ret = fd_avp_search_avp(avp, ogs_diam_s6a_re_synchronization_info, &avpch);
         ogs_assert(ret == 0);
         if (avpch) {
+            ogs_debug("[START] S6A RE SYNC INFO succeeds. Using MAC_S now\n");
             ret = fd_msg_avp_hdr(avpch, &hdr);
             ogs_assert(ret == 0);
             hss_auc_sqn(opc, auth_info.k, hdr->avp_value->os.data, sqn, mac_s);
@@ -132,21 +162,25 @@ static int hss_ogs_diam_s6a_air_cb( struct msg **msg, struct avp *avp,
                 result_code = OGS_DIAM_S6A_AUTHENTICATION_DATA_UNAVAILABLE;
                 goto out;
             }
+            ogs_debug("[END] S6A RE SYNC INFO condition exited\n");
         }
+        ogs_debug("[END] S6A REQ E-UTRAN AUTH INFO condition exited\n");
     }
 
-    rv = hss_db_update_rand_and_sqn(imsi_bcd, auth_info.rand, auth_info.sqn);
-    if (rv != OGS_OK) {
-        ogs_error("Cannot update rand and sqn for IMSI:'%s'", imsi_bcd);
-        result_code = OGS_DIAM_S6A_AUTHENTICATION_DATA_UNAVAILABLE;
-        goto out;
-    }
+    if (auth_info.use_remote_vectors != 1) {
+        rv = hss_db_update_rand_and_sqn(imsi_bcd, auth_info.rand, auth_info.sqn);
+        if (rv != OGS_OK) {
+            ogs_error("Cannot update rand and sqn for IMSI:'%s'", imsi_bcd);
+            result_code = OGS_DIAM_S6A_AUTHENTICATION_DATA_UNAVAILABLE;
+            goto out;
+        }
 
-    rv = hss_db_increment_sqn(imsi_bcd);
-    if (rv != OGS_OK) {
-        ogs_error("Cannot increment sqn for IMSI:'%s'", imsi_bcd);
-        result_code = OGS_DIAM_S6A_AUTHENTICATION_DATA_UNAVAILABLE;
-        goto out;
+        rv = hss_db_increment_sqn(imsi_bcd);
+        if (rv != OGS_OK) {
+            ogs_error("Cannot increment sqn for IMSI:'%s'", imsi_bcd);
+            result_code = OGS_DIAM_S6A_AUTHENTICATION_DATA_UNAVAILABLE;
+            goto out;
+        }
     }
 
     ret = fd_msg_search_avp(qry, ogs_diam_s6a_visited_plmn_id, &avp);
@@ -157,10 +191,55 @@ static int hss_ogs_diam_s6a_air_cb( struct msg **msg, struct avp *avp,
     memcpy(visited_plmn_id, hdr->avp_value->os.data, hdr->avp_value->os.len);
 #endif
 
-    milenage_generate(opc, auth_info.amf, auth_info.k,
-        ogs_uint64_to_buffer(auth_info.sqn, HSS_SQN_LEN, sqn), auth_info.rand,
-        autn, ik, ck, ak, xres, &xres_len);
-    hss_auc_kasme(ck, ik, hdr->avp_value->os.data, sqn, ak, kasme);
+    if (auth_info.use_remote_vectors != 1) {
+        if (block_auth_info.use_db != 1) {
+            char buffer[128];
+
+            ogs_debug("[HSS] [CRYPTO] [MILENAGE GENERATE] Starting to generate Milenage Values");
+            ogs_hex_to_ascii(opc, sizeof(opc), buffer, sizeof(buffer));
+            ogs_debug("     Using OPC : [%s]", buffer);
+            ogs_hex_to_ascii(auth_info.amf, sizeof(auth_info.amf), buffer, sizeof(buffer));
+            ogs_debug("     Using AMF : [%s]", buffer);
+            ogs_hex_to_ascii(auth_info.k, sizeof(auth_info.k), buffer, sizeof(buffer));
+            ogs_debug("     Using K : [%s]", buffer);
+            ogs_hex_to_ascii(sqn, sizeof(sqn), buffer, sizeof(buffer));
+            ogs_debug("     Using SQN : [%s]", buffer);
+            ogs_hex_to_ascii(auth_info.rand, sizeof(auth_info.rand), buffer, sizeof(buffer));
+            ogs_debug("     Using RAND : [%s]", buffer);
+
+            milenage_generate(opc, auth_info.amf, auth_info.k,
+                              ogs_uint64_to_buffer(auth_info.sqn, HSS_SQN_LEN, sqn), auth_info.rand,
+                              autn, ik, ck, ak, xres, &xres_len);
+
+            ogs_hex_to_ascii(autn, sizeof(autn), buffer, sizeof(buffer));
+            ogs_debug("    Generate AUTN : [%s]", buffer);
+            ogs_hex_to_ascii(ik, sizeof(ik), buffer, sizeof(buffer));
+            ogs_debug("    Generate IK   : [%s]", buffer);
+            ogs_hex_to_ascii(ck, sizeof(ck), buffer, sizeof(buffer));
+            ogs_debug("    Generate CK   : [%s]", buffer);
+            ogs_hex_to_ascii(ak, sizeof(ak), buffer, sizeof(buffer));
+            ogs_debug("    Generate AK   : [%s]", buffer);
+            ogs_hex_to_ascii(xres, xres_len, buffer, sizeof(buffer));
+            ogs_debug("    Generate XRES : [%s]", buffer);
+
+            ogs_debug("[HSS] [CRYPTO] [MILENAGE GENERATE] Ending generate Milenage Values");
+
+            ogs_debug("[HSS] [CRYPTO] [MILENAGE GENERATE] Starting to generate K_asme");
+            hss_auc_kasme(ck, ik, hdr->avp_value->os.data, sqn, ak, kasme);
+            ogs_hex_to_ascii(kasme, sizeof(kasme), buffer, sizeof(buffer));
+            ogs_debug("    Generate Kasme : [%s]", buffer);
+            ogs_debug("[HSS] [CRYPTO] [MILENAGE GENERATE] Ending generation of K_asme");
+        } else {
+            ogs_debug("Using the values generated and inserted into the database for authentication");
+//            kasme = block_auth_info.kasme;
+            memcpy(kasme, block_auth_info.kasme, OGS_SHA256_DIGEST_SIZE);
+//            xres = block_auth_info.xres;
+            memcpy(xres, block_auth_info.xres, block_auth_info.xres_len);
+            xres_len = block_auth_info.xres_len;
+//            autn = block_auth_info.autn;
+            memcpy(autn, block_auth_info.autn, OGS_AUTN_LEN);
+        }
+    }
 
     /* Set the Authentication-Info */
     ret = fd_msg_avp_new(ogs_diam_s6a_authentication_info, 0, &avp);
@@ -170,7 +249,12 @@ static int hss_ogs_diam_s6a_air_cb( struct msg **msg, struct avp *avp,
 
     ret = fd_msg_avp_new(ogs_diam_s6a_rand, 0, &avp_rand);
     ogs_assert(ret == 0);
-    val.os.data = auth_info.rand;
+    if (auth_info.use_remote_vectors != 1) {
+        val.os.data = auth_info.rand;
+    } else {
+        ogs_debug("    [Setting RAND] from provided Authentication Vectors");
+        val.os.data = block_auth_info.rand;
+    }
     val.os.len = HSS_KEY_LEN;
     ret = fd_msg_avp_setvalue(avp_rand, &val);
     ogs_assert(ret == 0);
@@ -179,8 +263,14 @@ static int hss_ogs_diam_s6a_air_cb( struct msg **msg, struct avp *avp,
 
     ret = fd_msg_avp_new(ogs_diam_s6a_xres, 0, &avp_xres);
     ogs_assert(ret == 0);
-    val.os.data = xres;
-    val.os.len = xres_len;
+    if (!auth_info.use_remote_vectors == 1) {
+        val.os.data = xres;
+        val.os.len = xres_len;
+    } else {
+        ogs_debug("    [Setting XRES] from provided Authentication Vectors");
+        val.os.data = block_auth_info.xres;
+        val.os.len = block_auth_info.xres_len;
+    }
     ret = fd_msg_avp_setvalue(avp_xres, &val);
     ogs_assert(ret == 0);
     ret = fd_msg_avp_add(avp_e_utran_vector, MSG_BRW_LAST_CHILD, avp_xres);
@@ -188,7 +278,12 @@ static int hss_ogs_diam_s6a_air_cb( struct msg **msg, struct avp *avp,
 
     ret = fd_msg_avp_new(ogs_diam_s6a_autn, 0, &avp_autn);
     ogs_assert(ret == 0);
-    val.os.data = autn;
+    if (!auth_info.use_remote_vectors == 1) {
+        val.os.data = autn;
+    } else {
+        ogs_debug("    [Setting AUTN] from provided Authentication Vectors");
+        val.os.data = block_auth_info.autn;
+    }
     val.os.len = OGS_AUTN_LEN;
     ret = fd_msg_avp_setvalue(avp_autn, &val);
     ogs_assert(ret == 0);
@@ -197,7 +292,12 @@ static int hss_ogs_diam_s6a_air_cb( struct msg **msg, struct avp *avp,
 
     ret = fd_msg_avp_new(ogs_diam_s6a_kasme, 0, &avp_kasme);
     ogs_assert(ret == 0);
-    val.os.data = kasme;
+    if (!auth_info.use_remote_vectors == 1) {
+        val.os.data = kasme;
+    } else {
+        ogs_debug("    [Setting Kasme] from provided Authentication Vectors");
+        val.os.data = block_auth_info.kasme;
+    }
     val.os.len = OGS_SHA256_DIGEST_SIZE;
     ret = fd_msg_avp_setvalue(avp_kasme, &val);
     ogs_assert(ret == 0);

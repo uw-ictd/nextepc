@@ -89,6 +89,7 @@ ogs_timer_t *ogs_timer_add(
     ogs_assert(manager);
     ogs_assert(cb);
 
+    ogs_info("ADDED TIMER");
     ogs_pool_alloc(&manager->pool, &timer);
     ogs_assert(timer);
 
@@ -111,6 +112,7 @@ void ogs_timer_delete(ogs_timer_t *timer)
     ogs_timer_stop(timer);
 
     ogs_pool_free(&manager->pool, timer);
+    ogs_info("REMOVED TIMER");
 }
 
 void ogs_timer_start(ogs_timer_t *timer, ogs_time_t duration)

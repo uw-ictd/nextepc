@@ -245,7 +245,7 @@ void mme_gtp_send_delete_session_request(mme_sess_t *sess)
 
 void mme_gtp_send_delete_all_sessions(mme_ue_t *mme_ue)
 {
-    mme_sess_t *sess = NULL;
+    mme_sess_t *sess = NULL, *next_sess = NULL;
 
     ogs_assert(mme_ue);
 
@@ -257,8 +257,10 @@ void mme_gtp_send_delete_all_sessions(mme_ue_t *mme_ue)
 
     mme_ue->session_context_will_deleted = 1;
 
+    ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);
     sess = mme_sess_first(mme_ue);
     while (sess != NULL) {
+        next_sess = mme_sess_next(mme_ue);
         if (MME_HAVE_SGW_S1U_PATH(sess)) {
             mme_bearer_t *bearer = mme_default_bearer_in_sess(sess);
             ogs_assert(bearer);
@@ -270,10 +272,13 @@ void mme_gtp_send_delete_all_sessions(mme_ue_t *mme_ue)
                 mme_gtp_send_delete_session_request(sess);
             }
         } else {
+            ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);
             mme_sess_remove(sess);
+            ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);
         }
-        sess = mme_sess_first(mme_ue);
+        sess = next_sess;
     }
+    ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);
 }
 
 void mme_gtp_send_create_bearer_response(mme_bearer_t *bearer)

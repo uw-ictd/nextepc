@@ -453,6 +453,7 @@ pgw_bearer_t *pgw_bearer_find_by_packet(ogs_pkbuf_t *pkt)
 
             }
 
+            ogs_thread_mutex_unlock(&pgw_self()->sess_list_mutex);
             return (bearer ? bearer : default_bearer);
         }
     }

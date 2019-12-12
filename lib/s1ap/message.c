@@ -40,6 +40,7 @@ ogs_pkbuf_t *ogs_s1ap_encode(ogs_s1ap_message_t *message)
 
     if (enc_ret.encoded < 0) {
         ogs_error("Failed to encode S1AP-PDU[%d]", (int)enc_ret.encoded);
+        ogs_error("More info: name=%s, xml=%s", enc_ret.failed_type->name, enc_ret.failed_type->xml_tag);
         ogs_pkbuf_free(pkbuf);
         return NULL;
     }

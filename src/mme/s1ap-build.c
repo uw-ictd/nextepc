@@ -339,6 +339,7 @@ ogs_pkbuf_t *s1ap_build_initial_context_setup_request(
             &UEAggregateMaximumBitrate->uEaggregateMaximumBitRateDL, 
             subscription_data->ambr.downlink);
 
+    ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);    
     sess = mme_sess_first(mme_ue);
     while (sess) {
         bearer = mme_bearer_first(sess);
@@ -417,6 +418,7 @@ ogs_pkbuf_t *s1ap_build_initial_context_setup_request(
         }
         sess = mme_sess_next(sess);
     }
+    ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
 
     ie = CALLOC(1, sizeof(S1AP_InitialContextSetupRequestIEs_t));
     ASN_SEQUENCE_ADD(&InitialContextSetupRequest->protocolIEs, ie);
@@ -1531,6 +1533,7 @@ ogs_pkbuf_t *s1ap_build_handover_command(enb_ue_t *source_ue)
     ogs_debug("    ENB_UE_S1AP_ID[%d] MME_UE_S1AP_ID[%d]",
             source_ue->enb_ue_s1ap_id, source_ue->mme_ue_s1ap_id);
 
+    ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);    
     sess = mme_sess_first(mme_ue);
     while (sess) {
         bearer = mme_bearer_first(sess);
@@ -1608,6 +1611,7 @@ ogs_pkbuf_t *s1ap_build_handover_command(enb_ue_t *source_ue)
         }
         sess = mme_sess_next(sess);
     }
+    ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
 
     ie = CALLOC(1, sizeof(S1AP_HandoverCommandIEs_t));
     ASN_SEQUENCE_ADD(&HandoverCommand->protocolIEs, ie);
@@ -1845,6 +1849,7 @@ ogs_pkbuf_t *s1ap_build_handover_request(
             &UEAggregateMaximumBitrate->uEaggregateMaximumBitRateDL, 
             subscription_data->ambr.downlink);
 
+    ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);    
     sess = mme_sess_first(mme_ue);
     while (sess) {
         bearer = mme_bearer_first(sess);
@@ -1910,6 +1915,7 @@ ogs_pkbuf_t *s1ap_build_handover_request(
         }
         sess = mme_sess_next(sess);
     }
+    ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
 
     ogs_s1ap_buffer_to_OCTET_STRING(
             source_totarget_transparentContainer->buf, 

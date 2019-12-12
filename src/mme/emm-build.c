@@ -377,6 +377,8 @@ ogs_pkbuf_t *emm_build_tau_accept(mme_ue_t *mme_ue)
     tau_accept->presencemask |=
         OGS_NAS_TRACKING_AREA_UPDATE_ACCEPT_EPS_BEARER_CONTEXT_STATUS_PRESENT;
     tau_accept->eps_bearer_context_status.length = 2;
+
+    ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);    
     sess = mme_sess_first(mme_ue);
     while (sess) {
         mme_bearer_t *bearer = mme_bearer_first(sess);
@@ -400,6 +402,7 @@ ogs_pkbuf_t *emm_build_tau_accept(mme_ue_t *mme_ue)
         }
         sess = mme_sess_next(sess);
     }
+    ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);
 
 #if 0 /* Need not to include T3402 */
     /* Set T3402 */

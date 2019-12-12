@@ -288,6 +288,7 @@ pgw_bearer_t *pgw_bearer_find_by_packet(ogs_pkbuf_t *pkt)
      *       Until be ready, linear searching will be use to find the bearer.
      */
 
+    ogs_thread_mutex_lock(&pgw_self()->sess_list_mutex);
     ogs_list_for_each(&pgw_self()->sess_list, sess) {
         if (sess->ipv4)
             ogs_debug("[PGW] PAA IPv4:%s",
@@ -455,6 +456,7 @@ pgw_bearer_t *pgw_bearer_find_by_packet(ogs_pkbuf_t *pkt)
             return (bearer ? bearer : default_bearer);
         }
     }
+    ogs_thread_mutex_unlock(&pgw_self()->sess_list_mutex);
 
     return NULL;
 }

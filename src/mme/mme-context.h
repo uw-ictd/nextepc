@@ -397,6 +397,7 @@ struct mme_ue_s {
     } while(0)
     uint8_t         ebi; /* EPS Bearer ID generator */
     ogs_list_t      sess_list;
+    ogs_thread_mutex_t  sess_list_mutex;
 
 #define ECM_CONNECTED(__mME) \
     ((__mME) && ((__mME)->enb_ue != NULL))

@@ -90,6 +90,7 @@ typedef struct pgw_context_s {
     ogs_hash_t      *sess_hash;     /* hash table (IMSI+APN) */
 
     ogs_list_t      sess_list;
+    ogs_thread_mutex_t  sess_list_mutex;
 } pgw_context_t;
 
 typedef struct pgw_subnet_s pgw_subnet_t;

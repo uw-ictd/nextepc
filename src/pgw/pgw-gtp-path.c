@@ -355,6 +355,7 @@ static int pgw_gtp_handle_multicast(ogs_pkbuf_t *recvbuf)
             pgw_sess_t *sess = NULL;
 
             /* IPv6 Multicast */
+            ogs_thread_mutex_lock(&pgw_self()->sess_list_mutex);    
             ogs_list_for_each(&pgw_self()->sess_list, sess) {
                 if (sess->ipv6) {
                     /* PDN IPv6 is avaiable */
@@ -364,9 +365,11 @@ static int pgw_gtp_handle_multicast(ogs_pkbuf_t *recvbuf)
                     rv = pgw_gtp_send_to_bearer(bearer, recvbuf);
                     ogs_assert(rv == OGS_OK);
 
+                    ogs_thread_mutex_unlock(&pgw_self()->sess_list_mutex);    
                     return PGW_GTP_HANDLED;
                 }
             }
+            ogs_thread_mutex_unlock(&pgw_self()->sess_list_mutex);    
         }
     }
 

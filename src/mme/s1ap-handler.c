@@ -1846,6 +1846,7 @@ void s1ap_handle_handover_notification(mme_enb_t *enb, ogs_s1ap_message_t *messa
     memcpy(&mme_ue->tai, &target_ue->saved.tai, sizeof(ogs_tai_t));
     memcpy(&mme_ue->e_cgi, &target_ue->saved.e_cgi, sizeof(ogs_e_cgi_t));
 
+    ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);    
     sess = mme_sess_first(mme_ue);
     while (sess) {
         bearer = mme_bearer_first(sess);
@@ -1863,6 +1864,7 @@ void s1ap_handle_handover_notification(mme_enb_t *enb, ogs_s1ap_message_t *messa
         }
         sess = mme_sess_next(sess);
     }
+    ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
 }
 
 void s1ap_handle_s1_reset(

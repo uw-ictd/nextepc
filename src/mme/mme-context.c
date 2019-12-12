@@ -2511,6 +2511,7 @@ int mme_ue_have_indirect_tunnel(mme_ue_t *mme_ue)
 {
     mme_sess_t *sess = NULL;
 
+    ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);    
     sess = mme_sess_first(mme_ue);
     while (sess) {
         mme_bearer_t *bearer = mme_bearer_first(sess);
@@ -2519,6 +2520,7 @@ int mme_ue_have_indirect_tunnel(mme_ue_t *mme_ue)
                 MME_HAVE_ENB_UL_INDIRECT_TUNNEL(bearer) ||
                 MME_HAVE_SGW_DL_INDIRECT_TUNNEL(bearer) ||
                 MME_HAVE_SGW_UL_INDIRECT_TUNNEL(bearer)) {
+                ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);
                 return 1;
             }
 
@@ -2526,6 +2528,7 @@ int mme_ue_have_indirect_tunnel(mme_ue_t *mme_ue)
         }
         sess = mme_sess_next(sess);
     }
+    ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
 
     return 0;
 }
@@ -2536,6 +2539,7 @@ int mme_ue_clear_indirect_tunnel(mme_ue_t *mme_ue)
 
     ogs_assert(mme_ue);
 
+    ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);    
     sess = mme_sess_first(mme_ue);
     while (sess) {
         mme_bearer_t *bearer = mme_bearer_first(sess);
@@ -2546,6 +2550,7 @@ int mme_ue_clear_indirect_tunnel(mme_ue_t *mme_ue)
         }
         sess = mme_sess_next(sess);
     }
+    ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
 
     return OGS_OK;
 }
@@ -2635,7 +2640,9 @@ mme_sess_t *mme_sess_add(mme_ue_t *mme_ue, uint8_t pti)
     bearer = mme_bearer_add(sess);
     ogs_assert(bearer);
 
+    ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);
     ogs_list_add(&mme_ue->sess_list, sess);
+    ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);
 
     stats_add_mme_session();
 
@@ -2647,7 +2654,9 @@ void mme_sess_remove(mme_sess_t *sess)
     ogs_assert(sess);
     ogs_assert(sess->mme_ue);
     
+    ogs_thread_mutex_lock(&sess->mme_ue->sess_list_mutex);
     ogs_list_remove(&sess->mme_ue->sess_list, sess);
+    ogs_thread_mutex_unlock(&sess->mme_ue->sess_list_mutex);
 
     mme_bearer_remove_all(sess);
 
@@ -2661,15 +2670,13 @@ void mme_sess_remove(mme_sess_t *sess)
 
 void mme_sess_remove_all(mme_ue_t *mme_ue)
 {
-    mme_sess_t *sess = NULL, *next_sess = NULL;
+    mme_sess_t *sess = NULL;
     
     sess = mme_sess_first(mme_ue);
     while (sess) {
-        next_sess = mme_sess_next(sess);
-
         mme_sess_remove(sess);
 
-        sess = next_sess;
+        sess = mme_sess_first(mme_ue);
     }
 }
 
@@ -2677,13 +2684,17 @@ mme_sess_t *mme_sess_find_by_pti(mme_ue_t *mme_ue, uint8_t pti)
 {
     mme_sess_t *sess = NULL;
 
+    ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);    
     sess = mme_sess_first(mme_ue);
     while(sess) {
-        if (pti == sess->pti)
+        if (pti == sess->pti) {
+            ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
             return sess;
+        }
 
         sess = mme_sess_next(sess);
     }
+    ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
 
     return NULL;
 }
@@ -2703,13 +2714,17 @@ mme_sess_t *mme_sess_find_by_apn(mme_ue_t *mme_ue, char *apn)
 {
     mme_sess_t *sess = NULL;
 
+    ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);    
     sess = mme_sess_first(mme_ue);
     while (sess) {
-        if (sess->pdn && strcmp(sess->pdn->apn, apn) == 0)
+        if (sess->pdn && strcmp(sess->pdn->apn, apn) == 0) {
+            ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
             return sess;
+        }
 
         sess = mme_sess_next(sess);
     }
+    ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
 
     return NULL;
 }
@@ -2729,11 +2744,13 @@ unsigned int mme_sess_count(mme_ue_t *mme_ue)
     unsigned int count = 0;
     mme_sess_t *sess = NULL;
 
+    ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);    
     sess = mme_sess_first(mme_ue);
     while (sess) {
         sess = mme_sess_next(sess);
         count++;
     }
+    ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
 
     return count;
 }
@@ -2834,15 +2851,18 @@ mme_bearer_t *mme_bearer_find_by_ue_ebi(mme_ue_t *mme_ue, uint8_t ebi)
     
     ogs_assert(mme_ue);
 
+    ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);    
     sess = mme_sess_first(mme_ue);
     while (sess) {
         bearer = mme_bearer_find_by_sess_ebi(sess, ebi);
         if (bearer) {
+            ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
             return bearer;
         }
 
         sess = mme_sess_next(sess);
     }
+    ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
 
     return NULL;
 }
@@ -2954,11 +2974,13 @@ int mme_bearer_is_inactive(mme_ue_t *mme_ue)
     mme_sess_t *sess = NULL;
     ogs_assert(mme_ue);
 
+    ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);    
     sess = mme_sess_first(mme_ue);
     while (sess) {
         mme_bearer_t *bearer = mme_bearer_first(sess);
         while (bearer) {
             if (MME_HAVE_ENB_S1U_PATH(bearer)) {
+                ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
                 return 0;
             }
 
@@ -2966,6 +2988,7 @@ int mme_bearer_is_inactive(mme_ue_t *mme_ue)
         }
         sess = mme_sess_next(sess);
     }
+    ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
 
     return 1;
 }
@@ -2975,6 +2998,7 @@ int mme_bearer_set_inactive(mme_ue_t *mme_ue)
     mme_sess_t *sess = NULL;
 
     ogs_assert(mme_ue);
+    ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);    
     sess = mme_sess_first(mme_ue);
     while (sess) {
         mme_bearer_t *bearer = mme_bearer_first(sess);
@@ -2985,6 +3009,7 @@ int mme_bearer_set_inactive(mme_ue_t *mme_ue)
         }
         sess = mme_sess_next(sess);
     }
+    ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
 
     return OGS_OK;
 }

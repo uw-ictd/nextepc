@@ -849,7 +849,9 @@ pgw_sess_t *pgw_sess_add(
             imsi, imsi_len, apn);
     ogs_hash_set(self.sess_hash, sess->hash_keybuf, sess->hash_keylen, sess);
 
+    ogs_thread_mutex_lock(&self.sess_list_mutex);
     ogs_list_add(&self.sess_list, sess);
+    ogs_thread_mutex_unlock(&self.sess_list_mutex);
     
     stats_add_session();
 
@@ -860,7 +862,9 @@ int pgw_sess_remove(pgw_sess_t *sess)
 {
     ogs_assert(sess);
 
+    ogs_thread_mutex_lock(&self.sess_list_mutex);
     ogs_list_remove(&self.sess_list, sess);
+    ogs_thread_mutex_unlock(&self.sess_list_mutex);
 
     ogs_hash_set(self.sess_hash, sess->hash_keybuf, sess->hash_keylen, NULL);
 

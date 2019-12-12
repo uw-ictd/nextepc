@@ -680,6 +680,7 @@ ogs_pkbuf_t *mme_s11_build_create_indirect_data_forwarding_tunnel_request(
     memset(&gtp_message, 0, sizeof(ogs_gtp_message_t));
 
     i = 0;
+    ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);    
     sess = mme_sess_first(mme_ue);
     while (sess != NULL) {
         bearer = mme_bearer_first(sess);
@@ -724,6 +725,7 @@ ogs_pkbuf_t *mme_s11_build_create_indirect_data_forwarding_tunnel_request(
         }
         sess = mme_sess_next(sess);
     }
+    ogs_thread_mutex_unlock(&mme_ue->sess_list_mutex);    
 
     gtp_message.h.type = type;
     return ogs_gtp_build_msg(&gtp_message);

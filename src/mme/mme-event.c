@@ -24,7 +24,7 @@
 
 #include "s1ap-path.h"
 
-#define EVENT_POOL 32 /* FIXME : 32 */
+#define EVENT_POOL 256 /* FIXME : 256 */
 void mme_event_init(void)
 {
     mme_self()->queue = ogs_queue_create(EVENT_POOL);

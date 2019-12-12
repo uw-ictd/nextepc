@@ -37,7 +37,7 @@ static void pollset_action_setup(void)
 }
 #endif
 
-#define EVENT_POOL 32 /* FIXME : 32 */
+#define EVENT_POOL 256 /* FIXME : 256 */
 static OGS_POOL(pool, pgw_event_t);
 
 void pgw_event_init(void)

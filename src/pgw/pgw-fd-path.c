@@ -27,7 +27,7 @@ static struct disp_hdl *hdl_gx_rar = NULL;
 struct sess_state {
     os0_t       gx_sid;             /* Gx Session-Id */
 
-#define MAX_CC_REQUEST_NUMBER 32
+#define MAX_CC_REQUEST_NUMBER 256
     pgw_sess_t *sess;
     ogs_gtp_xact_t *xact[MAX_CC_REQUEST_NUMBER];
     ogs_pkbuf_t *gtpbuf[MAX_CC_REQUEST_NUMBER];

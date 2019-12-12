@@ -22,7 +22,7 @@
 
 static OGS_POOL(pool, sgw_event_t);
 
-#define EVENT_POOL 32 /* FIXME : 32 */
+#define EVENT_POOL 256 /* FIXME : 256 */
 void sgw_event_init(void)
 {
     ogs_pool_init(&pool, EVENT_POOL);

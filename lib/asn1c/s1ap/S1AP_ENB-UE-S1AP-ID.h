@@ -19,7 +19,7 @@ extern "C" {
 #endif
 
 /* S1AP_ENB-UE-S1AP-ID */
-typedef long	 S1AP_ENB_UE_S1AP_ID_t;
+typedef uint32_t	 S1AP_ENB_UE_S1AP_ID_t;
 
 /* Implementation */
 extern asn_per_constraints_t asn_PER_type_S1AP_ENB_UE_S1AP_ID_constr_1;

@@ -160,8 +160,14 @@ ogs_pkbuf_t *mme_s11_build_create_session_request(
     if (pdn->pdn_type == OGS_DIAM_PDN_TYPE_IPV4 ||
         pdn->pdn_type == OGS_DIAM_PDN_TYPE_IPV6 ||
         pdn->pdn_type == OGS_DIAM_PDN_TYPE_IPV4V6) {
+        /* this code provides an "AND" of the type we support and the type requested
+         * by the UE. On the off-chance we get 0 intersection, (e.g. v4 & v6)
+         * we should handle somehow. Not sure how yet... */
         req->pdn_type.u8 = ((pdn->pdn_type + 1) & sess->request_type.pdn_type);
-        ogs_assert(req->pdn_type.u8 != 0);
+        if (req->pdn_type.u8 == 0) {
+            ogs_error("pdn_type & request_pdn_type = 0");
+            return NULL;
+        }
     } else if (pdn->pdn_type == OGS_DIAM_PDN_TYPE_IPV4_OR_IPV6) {
         req->pdn_type.u8 = sess->request_type.pdn_type;
     } else {

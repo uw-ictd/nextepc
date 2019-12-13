@@ -260,7 +260,7 @@ void mme_gtp_send_delete_all_sessions(mme_ue_t *mme_ue)
     ogs_thread_mutex_lock(&mme_ue->sess_list_mutex);
     sess = mme_sess_first(mme_ue);
     while (sess != NULL) {
-        next_sess = mme_sess_next(mme_ue);
+        next_sess = mme_sess_next(sess);
         if (MME_HAVE_SGW_S1U_PATH(sess)) {
             mme_bearer_t *bearer = mme_default_bearer_in_sess(sess);
             ogs_assert(bearer);

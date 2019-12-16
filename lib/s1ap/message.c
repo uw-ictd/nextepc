@@ -28,23 +28,27 @@ ogs_pkbuf_t *ogs_s1ap_encode(ogs_s1ap_message_t *message)
 
     ogs_assert(message);
 
-    if (ogs_log_get_domain_level(OGS_LOG_DOMAIN) >= OGS_LOG_TRACE)
+    if (ogs_log_get_domain_level(OGS_LOG_DOMAIN) >= OGS_LOG_TRACE) {
         asn_fprint(stdout, &asn_DEF_S1AP_S1AP_PDU, message);
+    }
 
     pkbuf = ogs_pkbuf_alloc(NULL, OGS_MAX_SDU_LEN);
     ogs_pkbuf_put(pkbuf, OGS_MAX_SDU_LEN);
 
     enc_ret = aper_encode_to_buffer(&asn_DEF_S1AP_S1AP_PDU, NULL,
                     message, pkbuf->data, OGS_MAX_SDU_LEN);
-    ogs_s1ap_free(message);
 
     if (enc_ret.encoded < 0) {
         ogs_error("Failed to encode S1AP-PDU[%d]", (int)enc_ret.encoded);
         ogs_error("More info: name=%s, xml=%s", enc_ret.failed_type->name, enc_ret.failed_type->xml_tag);
+        asn_fprint(stdout, &asn_DEF_S1AP_S1AP_PDU, message);
+        
+        ogs_s1ap_free(message);
         ogs_pkbuf_free(pkbuf);
         return NULL;
     }
 
+    ogs_s1ap_free(message);
     ogs_pkbuf_trim(pkbuf, (enc_ret.encoded >> 3));
 
     return pkbuf;

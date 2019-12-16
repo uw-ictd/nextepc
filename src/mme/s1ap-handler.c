@@ -227,6 +227,7 @@ void s1ap_handle_initial_ue_message(mme_enb_t *enb, ogs_s1ap_message_t *message)
     enb_ue = enb_ue_find_by_enb_ue_s1ap_id(enb, *ENB_UE_S1AP_ID);
     if (!enb_ue) {
         enb_ue = enb_ue_add(enb, *ENB_UE_S1AP_ID);
+        ogs_info("adding enb_ue_s1ap_id %u:%u", enb->enb_id, enb_ue->enb_ue_s1ap_id);
         ogs_assert(enb_ue);
 
         /* Find MME_UE if S_TMSI included */
@@ -268,6 +269,7 @@ void s1ap_handle_initial_ue_message(mme_enb_t *enb, ogs_s1ap_message_t *message)
                           mme_ue->enb_ue->enb_ue_s1ap_id,
                           mme_ue->enb_ue->mme_ue_s1ap_id);
                     enb_ue_remove(mme_ue->enb_ue);
+                    ogs_info("removing enb_ue_s1ap_id %u:%u func:s1ap_handle_initial_ue_message", enb_ue->enb->enb_id, enb_ue->enb_ue_s1ap_id);                
                 }
                 mme_ue_associate_enb_ue(mme_ue, enb_ue);
             }
@@ -957,21 +959,25 @@ void s1ap_handle_ue_context_release_complete(
     case S1AP_UE_CTX_REL_S1_CONTEXT_REMOVE:
         ogs_debug("    No Action");
         enb_ue_remove(enb_ue);
+        ogs_info("removing enb_ue_s1ap_id %u:%u func:s1ap_handle_ue_context_release_complete1", enb_ue->enb->enb_id, enb_ue->enb_ue_s1ap_id);                
         break;
     case S1AP_UE_CTX_REL_S1_REMOVE_AND_UNLINK:
         ogs_debug("    Action: S1 normal release");
         enb_ue_remove(enb_ue);
+        ogs_info("removing enb_ue_s1ap_id %u:%u func:s1ap_handle_ue_context_release_complete2", enb_ue->enb->enb_id, enb_ue->enb_ue_s1ap_id);                
         mme_ue_deassociate(mme_ue);
         break;
     case S1AP_UE_CTX_REL_UE_CONTEXT_REMOVE:
         ogs_debug("    Action: UE context remove()");
         enb_ue_remove(enb_ue);
+        ogs_info("removing enb_ue_s1ap_id %u:%u func:s1ap_handle_ue_context_release_complete3", enb_ue->enb->enb_id, enb_ue->enb_ue_s1ap_id);                
         mme_ue_remove(mme_ue);
         break;
     case S1AP_UE_CTX_REL_DELETE_INDIRECT_TUNNEL:
         ogs_debug("    Action: Delete indirect tunnel");
 
         source_ue_deassociate_target_ue(enb_ue);
+        ogs_info("removing enb_ue_s1ap_id %u:%u func:s1ap_handle_ue_context_release_complete4", enb_ue->enb->enb_id, enb_ue->enb_ue_s1ap_id);                
         enb_ue_remove(enb_ue);
 
         ogs_assert(mme_ue);
@@ -1970,6 +1976,7 @@ void s1ap_handle_s1_reset(
                 continue;
             }
 
+            ogs_info("removing enb_ue_s1ap_id %u:%u func:s1ap_handle_s1_reset", enb_ue->enb->enb_id, enb_ue->enb_ue_s1ap_id);                
             enb_ue_remove(enb_ue);
         }
         break;

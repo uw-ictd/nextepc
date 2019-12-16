@@ -310,6 +310,7 @@ void mme_state_operational(ogs_fsm_t *s, mme_event_t *e)
                       mme_ue->enb_ue->enb_ue_s1ap_id,
                       mme_ue->enb_ue->mme_ue_s1ap_id);
                 enb_ue_remove(mme_ue->enb_ue);
+                ogs_info("removing enb_ue_s1ap_id %u:%u func:mme_state_operational", enb_ue->enb->enb_id, enb_ue->enb_ue_s1ap_id);                
             }
             mme_ue_associate_enb_ue(mme_ue, enb_ue);
         }

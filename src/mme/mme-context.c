@@ -2043,7 +2043,6 @@ enb_ue_t *enb_ue_add(mme_enb_t *enb, uint32_t enb_ue_s1ap_id)
     }
 
     ogs_thread_mutex_lock(&enb->enb_ue_list_mutex);
-    ogs_info("adding enb_ue_s1ap_id %u:%u", enb->enb_id, enb_ue->enb_ue_s1ap_id);
     ogs_list_add(&enb->enb_ue_list, enb_ue);
     ogs_thread_mutex_unlock(&enb->enb_ue_list_mutex);
 
@@ -2066,7 +2065,6 @@ void enb_ue_remove(enb_ue_t *enb_ue)
     enb_ue_deassociate(enb_ue);
 
     ogs_thread_mutex_lock(&enb_ue->enb->enb_ue_list_mutex);
-    ogs_info("removing enb_ue_s1ap_id %u:%u", enb_ue->enb->enb_id, enb_ue->enb_ue_s1ap_id);
     ogs_list_remove(&enb_ue->enb->enb_ue_list, enb_ue);
     ogs_thread_mutex_unlock(&enb_ue->enb->enb_ue_list_mutex);
 
@@ -2084,6 +2082,7 @@ void enb_ue_remove_in_enb(mme_enb_t *enb)
 
     enb_ue = ogs_list_first(&enb->enb_ue_list);
     while (enb_ue) {
+        ogs_info("removing enb_ue_s1ap_id %u:%u func:enb_ue_remove_in_enb", enb_ue->enb->enb_id, enb_ue->enb_ue_s1ap_id);
         enb_ue_remove(enb_ue);
         enb_ue = ogs_list_first(&enb->enb_ue_list);
     }

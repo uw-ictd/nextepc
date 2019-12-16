@@ -43,7 +43,7 @@ struct ogs_hash_t {
     ogs_thread_mutex_t  one_big_mutex;
 };
 
-#define INITIAL_MAX 15 /* tunable == 2^n - 1 */
+#define INITIAL_MAX 255 /* tunable == 2^n - 1 */
 
 static ogs_hash_entry_t **alloc_array(ogs_hash_t *ht, unsigned int max)
 {

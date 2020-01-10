@@ -479,21 +479,21 @@ int hss_db_write_additional_vectors(char *imsi_bcd, hss_db_auth_info_t *auth_inf
     temp_sqn = auth_info->sqn;
 
     int i=1;
-    for (; i<10; i++) {
-        temp_sqn+=32;
-        ogs_uint64_to_buffer(temp_sqn, HSS_SQN_LEN, sqn);
-        milenage_generate(opc, auth_info->amf, auth_info->k, sqn, auth_info->rand, autn, ik, ck, ak, xres, &xres_len);
-        hss_auc_kasme(ck, ik, hdr->avp_value->os.data, sqn, ak, kasme);
+    for (; i<5; i++) {
 
-        if (i == 1) {
-            memcpy(blockchain_auth_info->autn, autn, OGS_AUTN_LEN);
-            memcpy(blockchain_auth_info->rand, auth_info->rand, OGS_RAND_LEN);
-            blockchain_auth_info->sqn = temp_sqn;
-            blockchain_auth_info->xres_len = xres_len;
-            memcpy(blockchain_auth_info->xres, xres, xres_len);
-            memcpy(blockchain_auth_info->kasme, kasme, OGS_SHA256_DIGEST_SIZE);
-            blockchain_auth_info->use_db = 1;
-        }
+        ogs_debug("[IN LOOP] HDR->AVP_VALUE->OS.DATA = [%s]", (char*) hdr->avp_value->os.data);
+
+        milenage_generate(opc, auth_info->amf, auth_info->k, ogs_uint64_to_buffer(temp_sqn, HSS_SQN_LEN, sqn), auth_info->rand, autn, ik, ck, ak, xres, &xres_len);
+
+//        if (i == 1) {
+//            memcpy(blockchain_auth_info->autn, autn, OGS_AUTN_LEN);
+//            memcpy(blockchain_auth_info->rand, auth_info->rand, OGS_RAND_LEN);
+//            blockchain_auth_info->sqn = temp_sqn;
+//            blockchain_auth_info->xres_len = xres_len;
+//            memcpy(blockchain_auth_info->xres, xres, xres_len);
+//            memcpy(blockchain_auth_info->kasme, kasme, OGS_SHA256_DIGEST_SIZE);
+//            blockchain_auth_info->use_db = 1;
+//        }
 
         ogs_debug("===================[START AUTH VECTORS]===================");
         char printable_autn[128];
@@ -512,9 +512,11 @@ int hss_db_write_additional_vectors(char *imsi_bcd, hss_db_auth_info_t *auth_inf
         ogs_debug("  XRES : [%s]", printable_xres);
 
         char printable_rand[128];
-        ogs_assert(rand);
-        ogs_hex_to_ascii(rand, OGS_RAND_LEN, printable_rand, sizeof(printable_rand));
+        ogs_assert(auth_info->rand);
+        ogs_hex_to_ascii(auth_info->rand, OGS_RAND_LEN, printable_rand, sizeof(printable_rand));
         ogs_debug("  RAND : [%s]", printable_rand);
+
+        hss_auc_kasme(ck, ik, (char*) hdr->avp_value->os.data, sqn, ak, kasme);
 
         char printable_kasme[128];
         ogs_assert(kasme);
@@ -563,6 +565,7 @@ int hss_db_write_additional_vectors(char *imsi_bcd, hss_db_auth_info_t *auth_inf
 
             rv = OGS_ERROR;
         }
+        temp_sqn+=32;
     }
 
     ogs_debug("    [Home HSS] Finished generating additional authentication vectors");

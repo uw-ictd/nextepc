@@ -28,12 +28,31 @@ void hss_auc_kasme(const uint8_t *ck, const uint8_t *ik,
         const uint8_t plmn_id[3], const uint8_t *sqn,  const uint8_t *ak,
         uint8_t *kasme)
 {
+    int HSS_KEY_LEN=16;
+    char debug_plmnid[128];
+    ogs_hex_to_ascii(plmn_id, 3, debug_plmnid, sizeof(debug_plmnid));
+    char debug_printable_ck[128], debug_printable_ik[128], debug_printable_ak[128], debug_sqn[128];
+    ogs_debug("----====Kasme Computation====----");
+    ogs_debug("PLMN : [%s]", debug_plmnid);
+    ogs_hex_to_ascii(ck, HSS_KEY_LEN, debug_printable_ck, sizeof(debug_printable_ck));
+    ogs_debug("CK   : [%s]", debug_printable_ck);
+    ogs_hex_to_ascii(ik, HSS_KEY_LEN, debug_printable_ik, sizeof(debug_printable_ik));
+    ogs_debug("IK   : [%s]", debug_printable_ik);
+    ogs_hex_to_ascii(sqn, HSS_SQN_LEN, debug_sqn, sizeof(debug_sqn));
+    ogs_debug("SQN  : [%s]", debug_sqn);
+    ogs_hex_to_ascii(ak, HSS_AK_LEN, debug_printable_ak, sizeof(debug_printable_ak));
+    ogs_debug("AK   : [%s]", debug_printable_ak);
     uint8_t s[14];
     uint8_t k[32];
     int i;
 
     memcpy(&k[0], ck, 16);
     memcpy(&k[16], ik, 16);
+
+    char debug_printable_k[128];
+    ogs_hex_to_ascii(k, 2*HSS_KEY_LEN, debug_printable_k, sizeof(debug_printable_k));
+    ogs_debug("    [AFTER MEMCPY] K : [%s]", debug_printable_k);
+
 
     s[0] = FC_VALUE;
     memcpy(&s[1], plmn_id, 3);
@@ -45,7 +64,16 @@ void hss_auc_kasme(const uint8_t *ck, const uint8_t *ik,
     s[12] = 0x00;
     s[13] = 0x06;
 
+    char debug_s_value[128];
+    ogs_hex_to_ascii(s, 14, debug_s_value, sizeof(debug_s_value));
+    ogs_debug("     [Before SHA256] S : [%s]", debug_s_value);
+
     ogs_hmac_sha256(k, 32, s, 14, kasme, 32);
+
+    char printable_kasme[128];
+    ogs_hex_to_ascii(kasme, 32, printable_kasme, sizeof(printable_kasme));
+    ogs_debug("Kasme : [%s]", printable_kasme);
+    ogs_debug("------");
 }
 
 void hss_auc_sqn(

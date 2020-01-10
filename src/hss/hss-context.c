@@ -22,6 +22,8 @@
 #include "hss-auc.h"
 #include "hss-context.h"
 
+#define VECTORS_TO_WRITE 5
+
 static hss_context_t self;
 static ogs_diam_config_t g_diam_conf;
 
@@ -344,11 +346,13 @@ int hss_db_fetch_sawtooth_authentication_vectors(char *imsi_bcd, hss_blockchain_
         if (!strcmp(key, "authvectors") && BSON_ITER_HOLDS_ARRAY(&inner_iter)) {
             bson_iter_array(&inner_iter, &av_count, &av);
             ogs_debug("Count AV_Count : [%d]", av_count);
-            if (av_count <= 0) {
-                ogs_debug("    Could not find any auth vectors in the field. Failing and falling back gracefully.");
+            bson_t * temporary_vectors = bson_new_from_data(av, av_count);
+            if (bson_empty(temporary_vectors)) {
+                ogs_error("    Could not find any auth vectors for the corresponding imsi : [%s].", imsi_bcd);
+                rv = OGS_ERROR;
+                goto out;
             } else {
                 ogs_debug("    Time to perform the required actions and create the auth vector from the data");
-                bson_t * temporary_vectors = bson_new_from_data(av, av_count);
                 ogs_debug("    Parsing the response into the corresponding auth vector structures");
                 bson_iter_t tIter;
                 bson_iter_t tInnerIter;
@@ -479,21 +483,11 @@ int hss_db_write_additional_vectors(char *imsi_bcd, hss_db_auth_info_t *auth_inf
     temp_sqn = auth_info->sqn;
 
     int i=1;
-    for (; i<5; i++) {
+    for (; i<VECTORS_TO_WRITE; i++) {
 
         ogs_debug("[IN LOOP] HDR->AVP_VALUE->OS.DATA = [%s]", (char*) hdr->avp_value->os.data);
 
         milenage_generate(opc, auth_info->amf, auth_info->k, ogs_uint64_to_buffer(temp_sqn, HSS_SQN_LEN, sqn), auth_info->rand, autn, ik, ck, ak, xres, &xres_len);
-
-//        if (i == 1) {
-//            memcpy(blockchain_auth_info->autn, autn, OGS_AUTN_LEN);
-//            memcpy(blockchain_auth_info->rand, auth_info->rand, OGS_RAND_LEN);
-//            blockchain_auth_info->sqn = temp_sqn;
-//            blockchain_auth_info->xres_len = xres_len;
-//            memcpy(blockchain_auth_info->xres, xres, xres_len);
-//            memcpy(blockchain_auth_info->kasme, kasme, OGS_SHA256_DIGEST_SIZE);
-//            blockchain_auth_info->use_db = 1;
-//        }
 
         ogs_debug("===================[START AUTH VECTORS]===================");
         char printable_autn[128];

@@ -277,9 +277,6 @@ static int hss_ogs_diam_s6a_air_cb( struct msg **msg, struct avp *avp,
             memcpy(ak, block_auth_info.ak, HSS_AK_LEN);
             memcpy(auth_info.rand, block_auth_info.rand, OGS_RAND_LEN);
 
-//        hss_auc_kasme(ck, ik, hdr->avp_value->os.data, sqn, ak, kasme);
-
-
             ogs_debug("Setting the authentication vector values as obtained from the database");
     }
 

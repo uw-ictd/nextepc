@@ -44,6 +44,11 @@ void *ogs_nas_to_plmn_id(
     return plmn_id;
 }
 
+/* Compute the ambr encoded specified in TS24.301 9.9.4.2.1 The encoding is
+ * complex, with different behavior for the br octet and the extended octets.
+ * This implementation handles the br octet cases first, then encodes the
+ * extended2 octet before the extended octet to maximize preserving precision.
+ * */
 static uint8_t nas_ambr_from_kbps(
     uint8_t *br, uint8_t *extended, uint8_t *extended2,
     uint64_t input)
@@ -57,39 +62,10 @@ static uint8_t nas_ambr_from_kbps(
 
         return length;
     }
-
-    /*
-     * Octet 7 : 00000000 
-     * Use the value indicated by the APN-AMBR for downlink and
-     *   APN-AMBR for downlink (extended) in octets 3 and 5.
-     *
-     * Octet 7 : 00000001 - 11111110
-     * The APN-AMBR is
-     *   (the binary coded value in 8 bits) * 256 Mbps +
-     *      "the value indicated by the APN-AMBR for downlink
-     *          and APN-AMBR for downlink (extended) in octets 3 and 5",
-     *
-     * giving a range of 256 Mbps to 65280 Mbps.  */
-    if (input > (65200*1024)) {
-        ogs_error("Overflow : %ldkbps > 65200Mbps", (long)input);
-        *br = 0xff;
-        *extended2 = 0b11111110;
-        length = ogs_max(length, 3);
-
-        input %= (256*1024);
-    }
-    else if (input >= (256*1024) && input <= (65200*1024)) {
-        *extended2 = input / (256*1024);
-        *br = 0xff;
-        length = ogs_max(length, 3);
-
-        input %= (256*1024);
-    }
-
     /* Octet 3 : 00000001 -  00111111 
      * The APN-AMBR is binary coded in 8 bits, using a granularity of 1 kbps
      * giving a range of values from 1 kbps to 63 kbps in 1 kbps increments. */
-    if (input >= 1 && input <= 63) {
+    else if (input >= 1 && input <= 63) {
         *br = input;
         length = ogs_max(length, 1);
     }
@@ -122,6 +98,47 @@ static uint8_t nas_ambr_from_kbps(
         length = ogs_max(length, 1);
     }
 
+    /*
+     * Octet 7 : 00000000
+     * Use the value indicated by the APN-AMBR for downlink and
+     *   APN-AMBR for downlink (extended) in octets 3 and 5.
+     *
+     * Octet 7 : 00000001 - 11111110
+     * The APN-AMBR is
+     *   (the binary coded value in 8 bits) * 256 Mbps +
+     *      "the value indicated by the APN-AMBR for downlink
+     *          and APN-AMBR for downlink (extended) in octets 3 and 5",
+     *
+     * giving a range of 256 Mbps to 65280 Mbps.  */
+    if (input > (65280*1024)) {
+        ogs_error("Overflow : %ldkbps > 65280Mbps", (long)input);
+        *br = 0b11111110;
+        *extended = 0b11111010;
+        *extended2 = 0b11111110;
+        length = ogs_max(length, 3);
+
+        return length;
+    }
+    else if (input >= (256*1024) && input <= (65280*1024)) {
+        /* Special case to prevent the key value 0x00 from being encoded in
+         * the extended octet if there is no significant remainder */
+        if ((input % (256*1024)) < 8700) {
+            *br = 0b11111110;
+            *extended = 0b11111010;
+            *extended2 = (input - (256*1024)) / (256*1024);
+            length = ogs_max(length, 3);
+
+            return length;
+        }
+
+        /* Normal case to preserve precision in the extended octet */
+        *br = 0b11111110;
+        *extended2 = input / (256*1024);
+        length = ogs_max(length, 3);
+
+        input %= (256*1024);
+    }
+
     /* If the network wants to indicate an APN-AMBR 
      * for downlink higher than 8640 kbps, 
      * it shall set octet 3 to "11111110", i.e. 8640 kbps, 
@@ -138,7 +155,7 @@ static uint8_t nas_ambr_from_kbps(
      * giving a range of values from 8700 kbps to 16000 kbps
      *   in 100 kbps increments.
      */
-    else if (input >= 8700 && input <= 16000) {
+    if (input >= 8700 && input <= 16000) {
         *br = 0b11111110;
         *extended = ((input - 8600) / 100);
         length = ogs_max(length, 2);
